@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-10-24T03:43:44.154Z",
+  "phase": null,
+  "phase_name": "project initialization (/gsd-new-project)",
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Map existing codebase (.planning/codebase/)", "status": "done", "commit": "05cf025"},
+    {"id": 2, "name": "Questioning + write PROJECT.md", "status": "done", "commit": "8da86ea"},
+    {"id": 3, "name": "Workflow preferences (config.json)", "status": "done", "commit": "d05b22a"},
+    {"id": 4, "name": "Project research: STACK/FEATURES/ARCHITECTURE/PITFALLS", "status": "done", "commit": "881163d"},
+    {"id": 5, "name": "Research SUMMARY.md (orchestrator self-heal write)", "status": "done", "commit": "21fd003"},
+    {"id": 6, "name": "Define requirements: scoping decisions", "status": "in_progress", "progress": "All scoping questions answered (see decisions); stopped at the optional 'Any additions?' question. REQUIREMENTS.md not yet written."}
+  ],
+  "remaining_tasks": [
+    {"id": 6, "name": "Ask 'Any requirements research missed?' then write .planning/REQUIREMENTS.md, show full list for approval, commit", "status": "in_progress"},
+    {"id": 7, "name": "Step 7.5: ask Vertical MVP vs Horizontal Layers (PROJECT_MODE)", "status": "not_started"},
+    {"id": 8, "name": "Spawn gsd-roadmapper (opus) -> ROADMAP.md, STATE.md, traceability; present; approval gate", "status": "not_started"},
+    {"id": 9, "name": "generate-claude-md --output .claude/CLAUDE.md; commit roadmap; show Next Up (/gsd-discuss-phase 1)", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Install Node 22 alongside the local Node 24 (nvm-windows/fnm/Volta); root .nvmrc selects it", "context": "Frontend toolchain (jsdom 30, Vitest 5) requires Node >=22.22", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Milestone scope = all of planning/PLAN.md", "rationale": "User: 'build the entire project - everything as described in planning/PLAN.md'", "phase": null},
+    {"decision": "Adopt all FEATURES.md gap resolutions G-01..G-23 into requirements", "rationale": "User chose 'Adopt all'; discuss-phase may still revisit", "phase": null},
+    {"decision": "P&L chart refetches /api/portfolio/history every 30s (G-03)", "rationale": "User choice; matches snapshot cadence", "phase": null},
+    {"decision": "Guardrail caps: watchlist max 50; max 10 trades + 10 watchlist changes per AI reply; empty or >2000-char chat message -> 400; 503 chat stores nothing", "rationale": "User chose 'Adopt caps'", "phase": null},
+    {"decision": "Include all four non-PLAN extras in v1: trade history (GET /api/trades + activity panel), header P&L since start (total_value - 10000), click position row/heatmap tile to select in main chart, prompt chips in empty chat", "rationale": "User selected all extras", "phase": null},
+    {"decision": "Node 22 instead of Node 20; PLAN.md section 11 updated", "rationale": "Node 20 EOL April 2026; user decision", "phase": null},
+    {"decision": "GSD config: mode interactive, granularity coarse, parallel, model_profile quality, worktrees on, nyquist kept on (explicit user choice despite coarse)", "rationale": "User settings", "phase": null}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Resume /gsd-new-project at Step 7: ask the 'Additions' question, then write REQUIREMENTS.md from PROJECT.md Active list + FEATURES.md IDs + the decisions above",
+  "context_notes": "Repo hygiene already committed: .gitignore lib/ fix (5e06b36), .claude lib folders (666493e), .gitattributes (eb8771f), .dockerignore (12567cc), .env.example (dc4ef68), db/.gitkeep (e5efaaa), .nvmrc (bfb29b3). Do not list these as remaining work. init.new-project reports project_exists=false only because REQUIREMENTS/ROADMAP are missing; PROJECT.md and config.json exist and must be kept."
+}
