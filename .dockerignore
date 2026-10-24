@@ -1,0 +1,49 @@
+# Build context is the repo root; the image only needs backend/ and frontend/ sources.
+
+# VCS, editor and agent tooling
+.git
+.gitattributes
+.gitignore
+.github
+.claude
+.planning
+planning
+**/CLAUDE.md
+.vscode
+.idea
+
+# Secrets: docker compose injects env vars via env_file at runtime
+.env
+.env.*
+!.env.example
+
+# Local data: the SQLite file lives in the finally-data volume
+db
+
+# E2E tests run in their own Playwright container
+test
+
+# Python build/dev artifacts (uv sync recreates the venv in the image)
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.coverage
+**/htmlcov
+backend/build
+backend/dist
+**/*.egg-info
+
+# Node build/dev artifacts (npm ci recreates node_modules in the build stage)
+**/node_modules
+frontend/.next
+frontend/out
+frontend/coverage
+**/*.tsbuildinfo
+**/npm-debug.log*
+
+# OS cruft
+**/.DS_Store
+**/Thumbs.db
