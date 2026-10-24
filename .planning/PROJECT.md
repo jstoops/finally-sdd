@@ -65,7 +65,7 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 - [ ] Data flow: live values computed client-side from SSE plus positions; refetch after chat actions; full refetch and cleared chat/sparklines after reset
 
 **Packaging & ops**
-- [ ] Multi-stage Dockerfile (Node 20 slim → Python 3.12 slim + uv), `DB_PATH=/app/db/finally.db`, uvicorn on 8000
+- [ ] Multi-stage Dockerfile (Node 22 slim → Python 3.12 slim + uv), `DB_PATH=/app/db/finally.db`, uvicorn on 8000
 - [ ] `docker-compose.yml` (port 8000, `env_file: .env`, named volume `finally-data` at `/app/db`)
 - [ ] Idempotent start/stop scripts for macOS/Linux (`.sh`) and Windows (`.ps1`) wrapping docker compose
 - [ ] `.env.example` committed; `db/.gitkeep`
@@ -117,6 +117,7 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 | Failed-action notes are templated by the backend, not a second LLM call | The LLM writes its message before actions run; a template is cheap and deterministic | — Pending |
 | Tracked tickers = watchlist ∪ held positions | Removing a held ticker from the watchlist must not break valuation | — Pending |
 | GSD model profile: quality; parallel execution with worktrees | User settings choice | — Pending |
+| Node 22 (not PLAN.md's original Node 20) for the frontend build stage and local dev | Node 20 reached end-of-life in April 2026; user decision 2026-10-23 (PLAN.md §11 updated to match) | — Pending |
 
 ## Evolution
 
