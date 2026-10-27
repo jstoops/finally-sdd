@@ -9,6 +9,7 @@ reads no environment and starts nothing. All startup work happens in `lifespan`.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -22,7 +23,10 @@ from fastapi.staticfiles import StaticFiles
 from .api import create_system_router, create_watchlist_router
 from .config import Settings, configure_logging
 from .db import Database
+from .errors import error_handlers
 from .market import MarketDataSource, PriceCache, create_market_data_source, create_stream_router
+from .snapshots import SNAPSHOT_INTERVAL, SnapshotRecorder, run_snapshot_loop
+from .tracker import TickerTracker
 from .watchlist import WatchlistService
 
 logger = logging.getLogger(__name__)
@@ -34,15 +38,23 @@ def create_app(
     settings: Settings | None = None,
     *,
     source_factory: SourceFactory | None = None,
+    snapshot_interval: float = SNAPSHOT_INTERVAL,
 ) -> FastAPI:
-    """Build the app. Objects are inert until lifespan runs (PLAN §3 startup order)."""
+    """Build the app. Objects are inert until lifespan runs (PLAN §3 startup order).
+
+    `snapshot_interval` is a test seam; production uses the 30-second default.
+    """
     configure_logging()
     # Settings.from_env loads .env BEFORE the market factory reads MASSIVE_API_KEY
     settings = settings or Settings.from_env()
     cache = PriceCache()
     source = (source_factory or create_market_data_source)(cache)
     db = Database(settings.db_path)
-    watchlist = WatchlistService(db, cache)
+    # One lock serializes every state mutation: watchlist now, trades and reset in Phase 2
+    state_lock = asyncio.Lock()
+    tracker = TickerTracker(db, source)
+    watchlist = WatchlistService(db, cache, tracker, state_lock)
+    recorder = SnapshotRecorder(db, cache, state_lock)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -50,16 +62,28 @@ def create_app(
         await asyncio.to_thread(db.init)
         tracked = await asyncio.to_thread(db.tracked_tickers)
         await source.start(tracked)  # PLAN §6: watchlist ∪ held positions
+        task: asyncio.Task | None = None
         try:
+            await recorder.record()  # OPS-01: initial snapshot before requests are served
+            task = asyncio.create_task(
+                run_snapshot_loop(recorder, snapshot_interval), name="snapshot-loop"
+            )
+            app.state.snapshot_task = task
             yield
         finally:
+            # Stop the snapshot task first, so no snapshot runs against a stopped source
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
             await source.stop()
 
-    app = FastAPI(lifespan=lifespan, title="FinAlly")
+    app = FastAPI(lifespan=lifespan, title="FinAlly", exception_handlers=error_handlers())
     app.state.settings = settings
     app.state.cache = cache
     app.state.source = source
     app.state.db = db
+    app.state.state_lock = state_lock
 
     # D-13: CORS only for the `next dev` loop; never enabled by default or in Docker.
     if settings.dev_cors_origin:
