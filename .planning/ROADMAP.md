@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. User can add a ticker from the watchlist panel (it starts pricing immediately in simulator mode) and remove one; re-adding a watched ticker is harmless, a malformed symbol or a 51st ticker shows a clear error, and watchlist edits survive a stop and start because the database lives in the `finally-data` volume and seeding never duplicates or overwrites rows.
   5. The header dot is green while streaming, yellow while reconnecting and red when closed, and turns green again on its own once the server is back; `GET /api/health` returns `{"status": "ok"}` and drives the compose healthcheck, and any unknown `/api/*` path returns a JSON 404 rather than the terminal page.
 
-**Plans**: 2/7 plans executed
+**Plans**: 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -43,9 +43,9 @@ Plans:
 - [x] 01-02-PLAN.md — Walking-skeleton tracer: seeded watchlist → lifespan → SSE → static-export page; health, JSON 404, opt-in dev CORS
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 01-03-PLAN.md — Container (Dockerfile, compose, finally-data volume), idempotent start/stop scripts, dev-loop and LAN-exposure docs
-- [ ] 01-04-PLAN.md — Watchlist add/remove API with the 50 cap, tracked-ticker reconcile, initial and 30s snapshots, Settings tests
-- [ ] 01-05-PLAN.md — Terminal grid, reconnecting stream with connection dot, dense rows (flash, Chg %, sparkline, selection)
+- [x] 01-03-PLAN.md — Container (Dockerfile, compose, finally-data volume), idempotent start/stop scripts, dev-loop and LAN-exposure docs
+- [x] 01-04-PLAN.md — Watchlist add/remove API with the 50 cap, tracked-ticker reconcile, initial and 30s snapshots, Settings tests
+- [x] 01-05-PLAN.md — Terminal grid, reconnecting stream with connection dot, dense rows (flash, Chg %, sparkline, selection)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 01-06-PLAN.md — Main Lightweight Charts price chart: history seed, live append, Open line, loading/empty states
@@ -111,6 +111,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Live Market Terminal | 2/7 | In Progress | - |
+| 1. Live Market Terminal | 5/7 | In Progress | - |
 | 2. Trading and Live Portfolio | 0/TBD | Not started | - |
 | 3. AI Copilot and Complete Terminal | 0/TBD | Not started | - |
