@@ -52,11 +52,17 @@ class RecordingSource(MarketDataSource):
         return list(self._tickers)
 
 
-def make_app(tmp_path: Path, *, static_dir: str | None = None, source_factory=None):
+def make_app(
+    tmp_path: Path,
+    *,
+    static_dir: str | None = None,
+    source_factory=None,
+    dev_cors_origin: str | None = None,
+):
     settings = Settings(
         db_path=str(tmp_path / "t.db"),
         static_dir=static_dir or str(tmp_path / "no-static"),
-        dev_cors_origin=None,
+        dev_cors_origin=dev_cors_origin,
     )
     if source_factory is None:
 
@@ -239,3 +245,80 @@ class TestImport:
         import app.main as main
 
         assert not hasattr(main, "app")
+
+
+METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+
+
+def static_dir_with_index(tmp_path: Path) -> str:
+    static = tmp_path / "static"
+    static.mkdir()
+    (static / "index.html").write_text("<html><body>FinAlly test</body></html>")
+    return str(static)
+
+
+class TestHealth:
+    def test_health_ok(self, tmp_path):
+        app, _ = recording(tmp_path)
+        with TestClient(app) as client:
+            resp = client.get("/api/health")
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok"}
+
+
+class TestApiNotFound:
+    @pytest.mark.parametrize("method", METHODS)
+    def test_unknown_api_path_is_json_404(self, tmp_path, method):
+        app, _ = recording(tmp_path)
+        with TestClient(app) as client:
+            resp = client.request(method, "/api/nope")
+        assert resp.status_code == 404
+        assert resp.headers["content-type"].startswith("application/json")
+        assert resp.json() == {"error": "Not found"}
+
+    @pytest.mark.parametrize("method", METHODS)
+    def test_unknown_api_path_is_json_404_with_static(self, tmp_path, method):
+        app, _ = recording(tmp_path, static_dir=static_dir_with_index(tmp_path))
+        with TestClient(app) as client:
+            resp = client.request(method, "/api/nope")
+        assert resp.status_code == 404
+        assert resp.headers["content-type"].startswith("application/json")
+        assert resp.json() == {"error": "Not found"}
+
+    def test_static_index_still_served(self, tmp_path):
+        app, _ = recording(tmp_path, static_dir=static_dir_with_index(tmp_path))
+        with TestClient(app) as client:
+            resp = client.get("/")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/html")
+
+    def test_real_routes_still_resolve(self, tmp_path):
+        app, _ = recording(tmp_path, static_dir=static_dir_with_index(tmp_path))
+        with TestClient(app) as client:
+            assert client.get("/api/watchlist").status_code == 200
+            assert client.get("/api/health").status_code == 200
+            history = client.get("/api/prices/AAPL/history")
+        assert history.status_code == 200
+        assert history.json() == {"ticker": "AAPL", "points": []}
+
+
+class TestDevCors:
+    def test_no_cors_headers_by_default(self, tmp_path):
+        app, _ = recording(tmp_path)
+        with TestClient(app) as client:
+            resp = client.get("/api/watchlist", headers={"Origin": "http://localhost:3000"})
+        assert resp.status_code == 200
+        assert "access-control-allow-origin" not in resp.headers
+
+    def test_preflight_allowed_when_configured(self, tmp_path):
+        app, _ = recording(tmp_path, dev_cors_origin="http://localhost:3000")
+        with TestClient(app) as client:
+            resp = client.options(
+                "/api/watchlist/AAPL",
+                headers={
+                    "Origin": "http://localhost:3000",
+                    "Access-Control-Request-Method": "DELETE",
+                },
+            )
+        assert resp.status_code == 200
+        assert resp.headers["access-control-allow-origin"] == "http://localhost:3000"
