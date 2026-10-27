@@ -576,7 +576,7 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 ### Multi-Stage Dockerfile
 
 ```
-Stage 1: Node 20 slim
+Stage 1: Node 22 slim
   - Copy frontend/
   - npm install && npm run build (produces static export)
 
