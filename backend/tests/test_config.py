@@ -8,12 +8,19 @@ import dataclasses
 import os
 import sqlite3
 from contextlib import closing
+from pathlib import Path, PurePosixPath
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import DEFAULT_DB_PATH, DEFAULT_STATIC_DIR, REPO_ROOT, Settings
+from app.config import (
+    DEFAULT_DB_PATH,
+    DEFAULT_STATIC_DIR,
+    REPO_ROOT,
+    Settings,
+    default_db_path,
+)
 from app.main import create_app
 from app.market import PriceCache, create_market_data_source
 from app.market.massive_client import MassiveDataSource
@@ -67,6 +74,28 @@ class TestEmptyValues:
         with patch.dict(os.environ, {"DEV_CORS_ORIGIN": value}, clear=True):
             settings = Settings.from_env(env_file=tmp_path / "none.env")
         assert settings.dev_cors_origin is None
+
+
+class TestDockerDbPath:
+    """CR-01: a blank DB_PATH must never move the Docker database off the volume."""
+
+    def test_local_layout_uses_repo_db_dir(self, tmp_path):
+        config_file = tmp_path / "repo" / "backend" / "app" / "config.py"
+        assert default_db_path(config_file) == tmp_path / "repo" / "db" / "finally.db"
+
+    def test_container_layout_uses_volume_path(self):
+        # In the image the module is /app/app/config.py, so the "repo root" is "/".
+        anchor = Path(Path.cwd().anchor)
+        config_file = anchor / "app" / "app" / "config.py"
+        assert default_db_path(config_file) == anchor / "app" / "db" / "finally.db"
+
+    def test_compose_pins_db_path_under_environment(self):
+        yaml = pytest.importorskip("yaml")
+        compose = yaml.safe_load((REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+        app = compose["services"]["app"]
+        db_path = app["environment"]["DB_PATH"]
+        volume_target = PurePosixPath(app["volumes"][0].split(":")[1])
+        assert PurePosixPath(db_path).parent == volume_target
 
 
 class TestOrdering:

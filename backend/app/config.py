@@ -11,7 +11,25 @@ from dotenv import load_dotenv
 
 # backend/app/config.py -> parents[0]=app, [1]=backend, [2]=repo root
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_DB_PATH = REPO_ROOT / "db" / "finally.db"
+
+
+def default_db_path(config_file: Path) -> Path:
+    """Return the fallback SQLite path for the given location of this module.
+
+    Locally (`<repo>/backend/app/config.py`) this is `<repo>/db/finally.db`. In the
+    image the backend is copied to `/app`, so the "repo root" would be the filesystem
+    root and the file would land at `/db/finally.db`, outside the `finally-data`
+    volume mounted at `/app/db`. In that layout use `<backend>/db/finally.db`
+    (`/app/db/finally.db`), the volume path, so a blank `DB_PATH=` can never lose data.
+    """
+    backend_dir = config_file.resolve().parents[1]
+    repo_root = backend_dir.parent
+    if repo_root == Path(repo_root.anchor):
+        return backend_dir / "db" / "finally.db"
+    return repo_root / "db" / "finally.db"
+
+
+DEFAULT_DB_PATH = default_db_path(Path(__file__))
 # backend/static locally; /app/static in Docker (backend is copied to /app)
 DEFAULT_STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
 
@@ -34,8 +52,11 @@ class Settings:
     def from_env(cls, env_file: Path | None = None) -> Settings:
         """Load `.env` (if present) without overriding the real environment, then read settings.
 
-        Empty values are treated as unset, so an empty `DB_PATH=` falls back to the
-        default instead of resolving to a path outside the data volume (PLAN §5).
+        Empty values are treated as unset, so an empty `DB_PATH=` falls back to
+        `DEFAULT_DB_PATH` (PLAN §5). In Docker, env_file values override the image's
+        `ENV DB_PATH`, so docker-compose.yml also pins `DB_PATH` under `environment:`
+        (which beats env_file); `default_db_path` is the second line of defence and
+        resolves to the volume path `/app/db/finally.db` in the container layout.
         """
         load_dotenv(env_file or REPO_ROOT / ".env", override=False)
         return cls(

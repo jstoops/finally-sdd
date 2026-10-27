@@ -103,7 +103,7 @@ Set in `.env` at the project root (copy `.env.example`):
 | `MASSIVE_API_KEY` | empty | Real market data via Massive (Polygon.io); simulator if unset |
 | `MASSIVE_POLL_INTERVAL` | `15` | Seconds between Massive polls |
 | `LLM_MOCK` | `false` | Deterministic mock LLM responses for testing |
-| `DB_PATH` | `db/finally.db` | SQLite file location (`/app/db/finally.db` in Docker; leave unset) |
+| `DB_PATH` | `db/finally.db` | SQLite file location for local dev (Docker always uses `/app/db/finally.db`, pinned in `docker-compose.yml`) |
 | `DEV_CORS_ORIGIN` | unset | Local development only: allow `next dev` (e.g. `http://localhost:3000`) to call the backend. Never set in Docker |
 
 ## Layout

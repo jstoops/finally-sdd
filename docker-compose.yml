@@ -13,6 +13,10 @@ services:
     env_file:
       - path: .env
         required: false # a fresh clone without .env still starts (simulator, no AI chat)
+    environment:
+      # Pinned here because `environment:` beats `env_file:`. A blank `DB_PATH=` in .env
+      # would otherwise override the Dockerfile's ENV and move the database off the volume.
+      DB_PATH: /app/db/finally.db
     volumes:
       - finally-data:/app/db
     healthcheck:
