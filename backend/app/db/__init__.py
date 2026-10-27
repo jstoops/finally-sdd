@@ -60,7 +60,11 @@ class Database:
             try:
                 yield conn
             except BaseException:
-                conn.execute("ROLLBACK")
+                # SQLite may already have rolled back (SQLITE_FULL, IOERR, some BUSY
+                # cases, or a statement that ended the transaction). A blind ROLLBACK
+                # would then raise "no transaction is active" and hide the real error.
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
                 raise
             conn.execute("COMMIT")
 

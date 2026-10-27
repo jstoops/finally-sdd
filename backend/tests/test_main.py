@@ -210,6 +210,25 @@ class TestDatabase:
         db.init()
         assert (tmp_path / "nested" / "dir" / "f.db").is_file()
 
+    def test_error_rolls_back_the_transaction(self, tmp_path):
+        db = Database(str(tmp_path / "t.db"))
+        db.init()
+        with pytest.raises(ValueError):
+            with db.transaction() as conn:
+                conn.execute("UPDATE users_profile SET cash_balance = 1")
+                raise ValueError("boom")
+        assert run_sql(tmp_path, "SELECT cash_balance FROM users_profile") == [(10000.0,)]
+
+    def test_original_error_survives_an_already_ended_transaction(self, tmp_path):
+        # WR-05: when SQLite has already ended the transaction, the context manager
+        # must re-raise the real error, not "cannot rollback - no transaction is active".
+        db = Database(str(tmp_path / "t.db"))
+        db.init()
+        with pytest.raises(ValueError, match="real cause"):
+            with db.transaction() as conn:
+                conn.execute("ROLLBACK")
+                raise ValueError("real cause")
+
 
 class TestStatic:
     def test_serves_index_html_when_present(self, tmp_path, recording):
