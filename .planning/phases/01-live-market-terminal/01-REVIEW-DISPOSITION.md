@@ -1,4 +1,4 @@
----
+| WR-05 |  | fixed | 1aa139a (01-REVIEW-FIX.md) || WR-04 |  | fixed | cbcee40 (01-REVIEW-FIX.md) || WR-03 |  | fixed | 4a93b73 (01-REVIEW-FIX.md) || WR-02 |  | fixed | 71b7447 (01-REVIEW-FIX.md) || WR-01 |  | fixed | cb3ce2b (01-REVIEW-FIX.md) || CR-01 |  | fixed | 6524d2d (01-REVIEW-FIX.md) |---
 phase: 01
 review: 01-REVIEW.md
 titles: json
@@ -73,7 +73,7 @@ findings:
     title: "A cancelled snapshot can still write after shutdown starts"
 open: 17
 total: 17
-recorded: 2026-10-27T12:02:01.822Z
+recorded: 2026-10-27T16:12:50.991Z
 ---
 
 # Phase 01: Code Review Disposition
