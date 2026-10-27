@@ -153,12 +153,77 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| OPS-01 | Phase 1 | Pending |
+| OPS-02 | Phase 1 | Pending |
+| OPS-03 | Phase 1 | Pending |
+| OPS-04 | Phase 1 | Pending |
+| OPS-05 | Phase 1 | Pending |
+| OPS-06 | Phase 1 | Pending |
+| OPS-07 | Phase 1 | Pending |
+| OPS-08 | Phase 1 | Pending |
+| TRD-01 | Phase 2 | Pending |
+| TRD-02 | Phase 2 | Pending |
+| TRD-03 | Phase 2 | Pending |
+| TRD-04 | Phase 2 | Pending |
+| TRD-05 | Phase 2 | Pending |
+| TRD-06 | Phase 2 | Pending |
+| TRD-07 | Phase 2 | Pending |
+| TRD-08 | Phase 2 | Pending |
+| TRD-09 | Phase 2 | Pending |
+| TRD-10 | Phase 2 | Pending |
+| WL-01 | Phase 1 | Pending |
+| WL-02 | Phase 1 | Pending |
+| WL-03 | Phase 1 | Pending |
+| WL-04 | Phase 1 | Pending |
+| WL-05 | Phase 1 | Pending |
+| WL-06 | Phase 2 | Pending |
+| MD-01 | Phase 1 | Pending |
+| MD-02 | Phase 1 | Pending |
+| MD-03 | Phase 1 | Pending |
+| MD-04 | Phase 1 | Pending |
+| MD-05 | Phase 1 | Pending |
+| MD-06 | Phase 1 | Pending |
+| MD-07 | Phase 1 | Pending |
+| MD-08 | Phase 2 | Pending |
+| PF-01 | Phase 2 | Pending |
+| PF-02 | Phase 2 | Pending |
+| PF-03 | Phase 2 | Pending |
+| PF-04 | Phase 2 | Pending |
+| PF-05 | Phase 2 | Pending |
+| PF-06 | Phase 2 | Pending |
+| PF-07 | Phase 2 | Pending |
+| PF-08 | Phase 2 | Pending |
+| PF-09 | Phase 2 | Pending |
+| PF-10 | Phase 3 | Pending |
+| AI-01 | Phase 3 | Pending |
+| AI-02 | Phase 3 | Pending |
+| AI-03 | Phase 3 | Pending |
+| AI-04 | Phase 3 | Pending |
+| AI-05 | Phase 3 | Pending |
+| AI-06 | Phase 3 | Pending |
+| AI-07 | Phase 3 | Pending |
+| AI-08 | Phase 3 | Pending |
+| AI-09 | Phase 3 | Pending |
+| AI-10 | Phase 3 | Pending |
+| AI-11 | Phase 3 | Pending |
+| AI-12 | Phase 3 | Pending |
+| AI-13 | Phase 3 | Pending |
+| AI-14 | Phase 3 | Pending |
+| AI-15 | Phase 3 | Pending |
+| AI-16 | Phase 3 | Pending |
+| UX-01 | Phase 1 | Pending |
+| UX-02 | Phase 3 | Pending |
+| TST-01 | Phase 3 | Pending |
+| TST-02 | Phase 3 | Pending |
+| TST-03 | Phase 3 | Pending |
+| TST-04 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 64 total
-- Mapped to phases: 0
-- Unmapped: 64 ⚠️
+- Mapped to phases: 64
+- Unmapped: 0 ✓
+- Per phase: Phase 1: 21 · Phase 2: 21 · Phase 3: 22
 
 ---
 *Requirements defined: 2026-10-26*
-*Last updated: 2026-10-26 after initial definition*
+*Last updated: 2026-10-26 after roadmap creation (traceability mapped to 3 phases)*
