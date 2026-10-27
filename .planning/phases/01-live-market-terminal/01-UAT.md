@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 01-live-market-terminal
 source: [01-VERIFICATION.md]
 started: 2026-10-27T16:17:58.527Z
-updated: 2026-10-27T16:27:43.630Z
+updated: 2026-10-27T16:28:48.561Z
 ---
 
 ## Current Test
 
-number: 2
-name: Click several watchlist rows and watch the main chart
-expected: |
-  Lightweight Charts canvas renders an area line pre-filled with about 5 minutes, extends live with local HH:MM:SS axis labels, dashed Open line shown, no flicker on switching
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -22,11 +18,11 @@ result: pass
 
 ### 2. Click several watchlist rows and watch the main chart
 expected: Lightweight Charts canvas renders an area line pre-filled with about 5 minutes, extends live with local HH:MM:SS axis labels, dashed Open line shown, no flicker on switching
-result: [pending] — retest. First run showed only the selected symbol, no chart: the container image was built before 01-06/01-07 merged (stale image, start script reused it). Rebuilt with --build 2026-10-27; served bundle now contains the chart code.
+result: pass (retest after rebuild; first run hit a stale image built before 01-06/01-07)
 
 ### 3. Add a ticker, remove one with the hover x, and repeat on a tablet-width window
 expected: x appears on row hover or keyboard focus and stays visible on touch/no-hover devices; inline errors for malformed symbol and the 51st ticker are readable
-result: [pending] — retest. First run showed no add input and no ×: same stale image as test 2. Rebuilt; served bundle now contains add-ticker-input and remove-{T}.
+result: pass (retest after rebuild; first run hit the same stale image)
 
 ### 4. With the app open, run `docker compose restart app` (not `down -v`)
 expected: Header dot goes yellow, then red after about 3 seconds of failed reconnects, then green again by itself; the watchlist re-fetches and prices resume
@@ -39,9 +35,9 @@ result: skipped — no macOS/Linux desktop available to the tester
 ## Summary
 
 total: 5
-passed: 2
+passed: 4
 issues: 0
-pending: 2
+pending: 0
 skipped: 1
 blocked: 0
 
