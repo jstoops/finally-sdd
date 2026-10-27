@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { apiFetch } from "@/api/client";
 import type { WatchlistEntry, WatchlistResponse } from "@/api/types";
+import { Header } from "@/components/Header";
 import { startPriceStream, usePrices } from "@/store/prices";
 
 const priceFormat = new Intl.NumberFormat("en-US", {
@@ -53,9 +54,7 @@ export default function Home() {
 
   return (
     <main data-testid="app-shell" className="min-h-screen bg-bg">
-      <header className="flex items-center border-b border-border bg-panel px-3 py-2">
-        <h1 className="font-mono font-semibold text-accent">FinAlly</h1>
-      </header>
+      <Header />
       <ul data-testid="watchlist" className="max-w-sm bg-panel">
         {entries.map((entry) => (
           <WatchlistLine key={entry.ticker} entry={entry} />
