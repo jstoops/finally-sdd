@@ -40,19 +40,26 @@ created: "2026-10-26"
 
 Filled in by the planner/executor per task. Requirement → test map from RESEARCH.md:
 
-| Req ID | Behavior | Test Type | Automated Command | File Exists | Status |
-|--------|----------|-----------|-------------------|-------------|--------|
-| OPS-01 | lifespan: schema, source started with tracked set, initial snapshot, task running; shutdown stops source | integration | `pytest tests/test_lifespan.py -x` | ❌ W0 | ⬜ pending |
-| OPS-02 | init idempotent; seed-once; 6 tables | unit | `pytest tests/test_db.py -x` | ❌ W0 | ⬜ pending |
-| OPS-03 | env wins over `.env`; empty `DB_PATH` → default; secrets hidden | unit | `pytest tests/test_config.py -x` | ❌ W0 | ⬜ pending |
-| OPS-04 | `/api/health` → 200 `{"status":"ok"}` | API | `pytest tests/api/test_system.py -x` | ❌ W0 | ⬜ pending |
-| OPS-05 | unknown `/api/*` → JSON 404; `/` → index.html when present | API | `pytest tests/api/test_static.py -x` | ❌ W0 | ⬜ pending |
-| OPS-06 | image builds, 1 worker, DB at `/app/db/finally.db` | smoke | packaging smoke | manual-assisted | ⬜ pending |
-| OPS-07 | healthcheck healthy; data survives down/up | smoke | `docker compose up -d --wait` + curl add/down/up/curl | manual-assisted | ⬜ pending |
-| OPS-08 | scripts idempotent, build on missing image, keep volume | manual | run each script twice | manual | ⬜ pending |
-| WL-01..05 | watchlist defaults, shape, add/remove codes, cap 50 | API | `pytest tests/api/test_watchlist.py -x` | ❌ W0 | ⬜ pending |
-| MD-01..07 | stream store, Chg %, flash, connection state, sparkline, chart, selection | unit/component | `npx vitest run` | ❌ W0 | ⬜ pending |
-| UX-01 | palette tokens; no pure black | static | `grep -rniE "#000\b\|#000000\|\bbg-black\b" frontend/src` → no hits | manual-assisted | ⬜ pending |
+Planner mapping (2026-10-26). Test files were consolidated to fit plan file budgets: lifespan, DB, health and static tests live in `backend/tests/test_main.py`; watchlist API tests in `backend/tests/test_watchlist.py` (not `tests/api/`).
+
+| Req ID | Plan-Task | Behavior | Test Type | Automated Command | File Exists | Status |
+|--------|-----------|----------|-----------|-------------------|-------------|--------|
+| (D-16 gate) | 01-01 T2 | 139 market tests on FastAPI >=0.135 / Starlette 1.x / Py 3.12 | regression | `uv run --directory backend --extra dev pytest -q tests/market` | ✅ exists | ⬜ pending |
+| UX-01 | 01-01 T3, 01-05 T2 | theme tokens, flash keyframes, no pure black, tabular-nums | static + build | `npm --prefix frontend run build` + negative grep on `frontend/src` | created in 01-01 | ⬜ pending |
+| OPS-01 | 01-02 T1, 01-04 T2 | init → source.start(tracked) before requests; initial snapshot; 30s loop; shutdown order | integration | `uv run --directory backend --extra dev pytest -q tests/test_main.py tests/test_snapshots.py` | ❌ created in plan | ⬜ pending |
+| OPS-02 | 01-02 T1 | idempotent init, seed once (A1), six tables | integration | `uv run --directory backend --extra dev pytest -q tests/test_main.py` | ❌ created in plan | ⬜ pending |
+| OPS-03 | 01-02 T1, 01-04 T2 | env wins over `.env`; empty values unset; `.env` loads before factory | unit | `uv run --directory backend --extra dev pytest -q tests/test_config.py` | ❌ created in plan | ⬜ pending |
+| OPS-04 | 01-02 T2 | `/api/health` → 200 `{"status":"ok"}` | API | `uv run --directory backend --extra dev pytest -q tests/test_main.py -k Health` | ❌ created in plan | ⬜ pending |
+| OPS-05 | 01-02 T1/T2 | unknown `/api/*` → JSON 404 (5 methods); `/` → index.html when present; API-only without export | API | `uv run --directory backend --extra dev pytest -q tests/test_main.py -k "NotFound or Static or built_frontend"` | ❌ created in plan | ⬜ pending |
+| OPS-06 | 01-03 T1 | image builds, 1 worker, DB at `/app/db/finally.db` | smoke | `docker compose build && docker compose up -d --wait --wait-timeout 90` + curl checks | ❌ created in plan | ⬜ pending |
+| OPS-07 | 01-03 T1 | healthcheck healthy; marker row survives down/up; volume kept | smoke | docker exec insert → down → up → curl → cleanup (01-03 T1 verify) | ❌ created in plan | ⬜ pending |
+| OPS-08 | 01-03 T2 | scripts idempotent (run twice), build when missing, keep volume | smoke + manual (macOS/Linux) | PowerShell and Git Bash runs ×2 (01-03 T2 verify) | ❌ created in plan | ⬜ pending |
+| WL-01, WL-02 | 01-02 T1 | defaults in order; shape; null prices when unpriced | API | `uv run --directory backend --extra dev pytest -q tests/test_main.py` | ❌ created in plan | ⬜ pending |
+| WL-03..05 (API) | 01-04 T1 | 201/200/400/422; 204/404/400; cap 50 with dup-before-cap; concurrency | API | `uv run --directory backend --extra dev pytest -q tests/test_watchlist.py tests/test_tracker.py` | ❌ created in plan | ⬜ pending |
+| WL-03..05 (UI) | 01-07 T1/T2 | add form, client regex, inline errors, × remove | component | `npm --prefix frontend test -- src/api/ticker src/components/watchlist` | ❌ created in plan | ⬜ pending |
+| MD-01, MD-04 | 01-02 T1, 01-05 T1 | one EventSource; status machine; backoff 1s/2s/5s; StrictMode | unit/component | `npm --prefix frontend test -- src/stream src/components` | ❌ created in plan | ⬜ pending |
+| MD-02, MD-03, MD-05, MD-07 | 01-05 T2, 01-07 T2 | Chg %, flash, sparkline, selection rules | unit/component | `npm --prefix frontend test` | ❌ created in plan | ⬜ pending |
+| MD-06 | 01-06 T1/T2 | history seed, stale guard, out-of-order drop, Open line, D-12 states | component | `npm --prefix frontend test -- src/domain/chart src/components/ChartPanel` | ❌ created in plan | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
