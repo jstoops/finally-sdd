@@ -21,6 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Live Market Terminal
+
 **Goal**: A user runs one start script, opens `http://localhost:8000`, and watches a dark trading terminal stream live prices for a watchlist they can chart, add to and remove from
 **Mode:** mvp
 **Depends on**: Nothing (first phase; integrates the completed `backend/app/market/` subsystem)
@@ -31,19 +32,29 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Clicking a watchlist row shows a larger chart of that ticker, already filled with the last ~5 minutes of prices and extending live with local `HH:MM:SS` times; the first ticker is selected on load, and removing the selected ticker selects the first remaining one.
   4. User can add a ticker from the watchlist panel (it starts pricing immediately in simulator mode) and remove one; re-adding a watched ticker is harmless, a malformed symbol or a 51st ticker shows a clear error, and watchlist edits survive a stop and start because the database lives in the `finally-data` volume and seeding never duplicates or overwrites rows.
   5. The header dot is green while streaming, yellow while reconnecting and red when closed, and turns green again on its own once the server is back; `GET /api/health` returns `{"status": "ok"}` and drives the compose healthcheck, and any unknown `/api/*` path returns a JSON 404 rather than the terminal page.
+
 **Plans**: 7 plans
 
 Plans:
+**Wave 1**
 - [ ] 01-01-PLAN.md — Wave 0: package-legitimacy gate, FastAPI/Starlette 1.x bump (139-test gate), Next.js 16 static-export scaffold with the dark theme
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-02-PLAN.md — Walking-skeleton tracer: seeded watchlist → lifespan → SSE → static-export page; health, JSON 404, opt-in dev CORS
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 01-03-PLAN.md — Container (Dockerfile, compose, finally-data volume), idempotent start/stop scripts, dev-loop and LAN-exposure docs
 - [ ] 01-04-PLAN.md — Watchlist add/remove API with the 50 cap, tracked-ticker reconcile, initial and 30s snapshots, Settings tests
 - [ ] 01-05-PLAN.md — Terminal grid, reconnecting stream with connection dot, dense rows (flash, Chg %, sparkline, selection)
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 01-06-PLAN.md — Main Lightweight Charts price chart: history seed, live append, Open line, loading/empty states
 - [ ] 01-07-PLAN.md — Watchlist add input and row × remove wired to the API, shared client regex, inline errors
+
 **UI hint**: yes
 
 ### Phase 2: Trading and Live Portfolio
+
 **Goal**: The user can buy and sell shares from the trade bar and watch cash, positions, the heatmap, the P&L chart and trade history update live and stay correct to the cent, then reset to a fresh $10,000 account
 **Mode:** mvp
 **Depends on**: Phase 1
@@ -54,10 +65,12 @@ Plans:
   3. The header total value, cash and P&L since start, the positions table (quantity, avg cost, current price, P&L and P&L % in green/red) and the heatmap (tiles sized by weight, shaded by P&L %) all move live with streamed prices without polling `/api/portfolio`; with no positions the heatmap reads "No positions — buy something or ask FinAlly"; clicking a position row or heatmap tile charts that ticker.
   4. The P&L chart plots total portfolio value from snapshots recorded at startup, every 30 seconds and after each trade; it renders sensibly with a single point and refreshes every 30 seconds and after each trade.
   5. A held ticker removed from the watchlist keeps streaming and keeps its live P&L, and selling an unwatched ticker to zero stops pricing it; after confirming Reset in the header, the user sees $10,000 cash, no positions or trades, a fresh P&L starting point, and the default watchlist.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 3: AI Copilot and Complete Terminal
+
 **Goal**: The user can ask FinAlly in plain language to analyze the portfolio, trade and manage the watchlist, see every requested action execute instantly through the same rules as manual trades, and use the finished terminal with every panel on screen, proven by the full unit and end-to-end suites
 **Mode:** mvp
 **Depends on**: Phase 2
@@ -68,6 +81,7 @@ Plans:
   3. Without `OPENROUTER_API_KEY` the app still starts and the chat shows a "not configured" system bubble; an LLM failure or unreadable reply shows an error bubble while the user's message is kept; an empty or over-long message is rejected with a clear bubble; with `LLM_MOCK=true`, "buy", "sell", "add PYPL" and "remove PYPL" behave deterministically with no API key.
   4. Reloading the page restores the last 50 chat messages with their action chips exactly as they first appeared; Reset (disabled while a chat request is in flight) clears the chat panel, sparklines and chart selection and refetches every panel.
   5. On a wide screen the header, watchlist, main chart, heatmap, P&L chart, positions table, trade bar and collapsible chat panel are all visible at once and stay usable on a tablet; the backend pytest, frontend unit and Playwright suites pass, with E2E run from `test/docker-compose.test.yml` under `LLM_MOCK=true`, resetting before each test and covering all seven PLAN §12 scenarios.
+
 **Plans**: TBD
 **UI hint**: yes
 
