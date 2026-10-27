@@ -114,3 +114,13 @@ Phases execute in numeric order: 1 → 2 → 3
 | 1. Live Market Terminal | 7/7 | In Progress | - |
 | 2. Trading and Live Portfolio | 0/TBD | Not started | - |
 | 3. AI Copilot and Complete Terminal | 0/TBD | Not started | - |
+
+## Backlog
+
+### Phase 999.1: Follow-up — Phase 01 deferred UAT follow-up: Test 5 (BACKLOG)
+
+**Goal:** Resolve the UAT checkpoint deferred during Phase 01 verification
+**Source phase:** 01
+**Deferred at:** 2026-10-27 during /gsd-verify-work 01 session completion
+**Follow-ups:**
+- [ ] Test 5: Verify start_mac.sh browser launch (open/xdg-open) and safe re-run on a macOS/Linux desktop (deferred 2026-10-27)
