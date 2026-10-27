@@ -1,43 +1,43 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 01
-current_phase_name: Live Market Terminal
-status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-10-27T07:02:33.894Z"
-last_activity: 2026-10-26
-last_activity_desc: Phase 01 execution started
-state_head: 243841880f7f004d85a9389ec885d56a28464dca
+current_phase: 2
+current_phase_name: Trading and Live Portfolio
+status: planning
+stopped_at: Phase 01 complete, ready to plan Phase 2
+last_updated: "2026-10-27T16:57:55.755Z"
+last_activity: 2026-10-27
+last_activity_desc: Phase 01 complete, transitioned to Phase 2
+state_head: 41e8a9fd7a828e246c6027ad042d47b47b46a376
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 0
-  percent: 0
+  completed_plans: 7
+  percent: 33
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-23)
+See: .planning/PROJECT.md (updated 2026-10-27)
 
 **Core value:** A user can open one URL, watch prices stream live, and trade a simulated portfolio, either manually or by asking the AI copilot, with every number (cash, positions, P&L) staying correct and updating in real time.
-**Current focus:** Phase 01 — Live Market Terminal
+**Current focus:** Phase 2 — Trading and Live Portfolio
 
 ## Current Position
 
-Phase: 01 (Live Market Terminal) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 01
-Last activity: 2026-10-26 — Phase 01 execution started
+Phase: 2 — Trading and Live Portfolio
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-27 — Phase 01 complete, transitioned to Phase 2
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
+- Total plans completed: 7
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -45,7 +45,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01 | 7 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -65,15 +65,17 @@ Recent decisions affecting current work:
 - [Init]: Integrate the validated `backend/app/market/` subsystem as-is; change it only where integration requires
 - [Init]: All G-01..G-23 gap resolutions adopted (caps: watchlist 50, 10 trades + 10 watchlist changes per AI reply, 2,000-char chat message; a 503 chat stores nothing)
 - [Init]: Node 22 (fnm, `.nvmrc` = 22) for local frontend work and the Docker build stage
+- [Phase 1]: Phase 2 trade and reset services must take the shared `app.state` `state_lock` used by watchlist and snapshots
+- [Phase 1]: `TickerTracker.reconcile` is the only app caller of `source.add_ticker`/`remove_ticker`; trades and reset must go through it
+- [Phase 1]: Business failures raise `DomainError` (400) / `NotFoundError` (404) and render as `{"error": ...}`
 
 ### Pending Todos
 
-None yet.
+- Backlog 999.1: verify `start_mac.sh` browser launch and safe re-run on a macOS/Linux desktop (deferred from UAT 01 test 5)
 
 ### Blockers/Concerns
 
-- [Phase 1]: FastAPI 0.128.7 → >=0.135 (Starlette 1.x) bump; re-run the 139 market tests before building on it
-- [Phase 1]: `scripts/*.sh` need the executable bit (`git update-index --chmod=+x`); `.ps1` files must be ASCII-only
+- [Phase 1]: Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed (UAT 01 gap, minor); after pulling changes, run with `--build`
 - [Phase 3]: Cerebras strict-schema acceptance and OpenRouter provider fallback are unverified; spike a real call before building the chat pipeline
 
 ## Deferred Items
@@ -86,6 +88,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-27T02:01:27.591Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-live-market-terminal/01-CONTEXT.md
+Last session: 2026-10-27T17:05:00Z
+Stopped at: Phase 01 complete, ready to plan Phase 2
+Resume file: None

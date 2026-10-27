@@ -14,7 +14,7 @@ FinAlly goes from a finished market-data engine to a complete AI trading termina
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Live Market Terminal** - One command launches the container; the user watches a dark terminal stream, chart and edit a live watchlist
+- [x] **Phase 1: Live Market Terminal** - One command launches the container; the user watches a dark terminal stream, chart and edit a live watchlist (completed 2026-10-27)
 - [ ] **Phase 2: Trading and Live Portfolio** - The user trades from the trade bar and sees cash, positions, heatmap, P&L and trade history update live, then can reset
 - [ ] **Phase 3: AI Copilot and Complete Terminal** - The user trades and manages the watchlist by chatting with FinAlly; the full terminal is proven end to end
 
@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. User can add a ticker from the watchlist panel (it starts pricing immediately in simulator mode) and remove one; re-adding a watched ticker is harmless, a malformed symbol or a 51st ticker shows a clear error, and watchlist edits survive a stop and start because the database lives in the `finally-data` volume and seeding never duplicates or overwrites rows.
   5. The header dot is green while streaming, yellow while reconnecting and red when closed, and turns green again on its own once the server is back; `GET /api/health` returns `{"status": "ok"}` and drives the compose healthcheck, and any unknown `/api/*` path returns a JSON 404 rather than the terminal page.
 
-**Plans**: 7/7 plans executed
+**Plans**: 7/7 plans complete
 
 Plans:
 **Wave 1**
@@ -111,7 +111,7 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Live Market Terminal | 7/7 | In Progress | - |
+| 1. Live Market Terminal | 7/7 | Complete    | 2026-10-27 |
 | 2. Trading and Live Portfolio | 0/TBD | Not started | - |
 | 3. AI Copilot and Complete Terminal | 0/TBD | Not started | - |
 

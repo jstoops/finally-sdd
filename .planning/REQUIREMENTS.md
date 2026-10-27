@@ -11,17 +11,17 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 
 ### Platform & Startup
 
-- [ ] **OPS-01**: On startup, the FastAPI `lifespan` hook creates the schema and seed, starts the market source with watchlist ∪ held positions, records an initial snapshot, and starts the 30s snapshot task, all before any request is accepted
-- [ ] **OPS-02**: The SQLite database at `DB_PATH` (default `<repo>/db/finally.db`) is created from `schema.sql` (`CREATE TABLE IF NOT EXISTS`) and seeded with `INSERT OR IGNORE` (default user with $10,000 cash, 10-ticker watchlist), using stdlib `sqlite3`; restarting never duplicates or overwrites data
-- [ ] **OPS-03**: In local dev the backend loads `../.env` with `python-dotenv`; variables already set in the environment take precedence; API key values are never logged
-- [ ] **OPS-04**: `GET /api/health` returns `200 {"status": "ok"}`
-- [ ] **OPS-05**: FastAPI serves the Next.js static export at `/`; every unknown `/api/*` path returns a JSON `404`, never `index.html` (G-18)
+- [x] **OPS-01**: On startup, the FastAPI `lifespan` hook creates the schema and seed, starts the market source with watchlist ∪ held positions, records an initial snapshot, and starts the 30s snapshot task, all before any request is accepted
+- [x] **OPS-02**: The SQLite database at `DB_PATH` (default `<repo>/db/finally.db`) is created from `schema.sql` (`CREATE TABLE IF NOT EXISTS`) and seeded with `INSERT OR IGNORE` (default user with $10,000 cash, 10-ticker watchlist), using stdlib `sqlite3`; restarting never duplicates or overwrites data
+- [x] **OPS-03**: In local dev the backend loads `../.env` with `python-dotenv`; variables already set in the environment take precedence; API key values are never logged
+- [x] **OPS-04**: `GET /api/health` returns `200 {"status": "ok"}`
+- [x] **OPS-05**: FastAPI serves the Next.js static export at `/`; every unknown `/api/*` path returns a JSON `404`, never `index.html` (G-18)
 
 ### Packaging & Ops
 
-- [ ] **OPS-06**: A multi-stage Dockerfile (Node 22 slim → Python 3.12 slim + uv) builds the frontend export, installs backend dependencies from the lockfile, sets `DB_PATH=/app/db/finally.db`, and runs a single uvicorn worker on port 8000
-- [ ] **OPS-07**: `docker-compose.yml` maps port `8000:8000`, uses `env_file: .env`, mounts the named volume `finally-data` at `/app/db`, and defines a healthcheck on `/api/health`; data survives `docker compose down` / `up`
-- [ ] **OPS-08**: User can start and stop the app with idempotent scripts for macOS/Linux (`start_mac.sh`, `stop_mac.sh`) and Windows (`start_windows.ps1`, `stop_windows.ps1`) that wrap `docker compose`, build when `--build` is passed or the image is missing, print the URL, and never delete the volume
+- [x] **OPS-06**: A multi-stage Dockerfile (Node 22 slim → Python 3.12 slim + uv) builds the frontend export, installs backend dependencies from the lockfile, sets `DB_PATH=/app/db/finally.db`, and runs a single uvicorn worker on port 8000
+- [x] **OPS-07**: `docker-compose.yml` maps port `8000:8000`, uses `env_file: .env`, mounts the named volume `finally-data` at `/app/db`, and defines a healthcheck on `/api/health`; data survives `docker compose down` / `up`
+- [x] **OPS-08**: User can start and stop the app with idempotent scripts for macOS/Linux (`start_mac.sh`, `stop_mac.sh`) and Windows (`start_windows.ps1`, `stop_windows.ps1`) that wrap `docker compose`, build when `--build` is passed or the image is missing, print the URL, and never delete the volume
 
 ### Trading
 
@@ -38,22 +38,22 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 
 ### Watchlist & Tracked Tickers
 
-- [ ] **WL-01**: On first launch the watchlist contains AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX
-- [ ] **WL-02**: `GET /api/watchlist` returns tickers in `added_at` order with `price` and `open_price` (`null` until the first price arrives)
-- [ ] **WL-03**: User can add a ticker from the watchlist panel; `POST /api/watchlist` returns `201` for a new ticker, `200` with the existing entry for a duplicate, and `400` for a malformed ticker
-- [ ] **WL-04**: User can remove a ticker from the watchlist panel; `DELETE /api/watchlist/{ticker}` returns `204`, or `404` when the ticker isn't on the watchlist
-- [ ] **WL-05**: The watchlist is capped at 50 tickers; adding beyond the cap returns `400` with a clear message, for both manual and AI adds (G-13)
+- [x] **WL-01**: On first launch the watchlist contains AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX
+- [x] **WL-02**: `GET /api/watchlist` returns tickers in `added_at` order with `price` and `open_price` (`null` until the first price arrives)
+- [x] **WL-03**: User can add a ticker from the watchlist panel; `POST /api/watchlist` returns `201` for a new ticker, `200` with the existing entry for a duplicate, and `400` for a malformed ticker
+- [x] **WL-04**: User can remove a ticker from the watchlist panel; `DELETE /api/watchlist/{ticker}` returns `204`, or `404` when the ticker isn't on the watchlist
+- [x] **WL-05**: The watchlist is capped at 50 tickers; adding beyond the cap returns `400` with a clear message, for both manual and AI adds (G-13)
 - [ ] **WL-06**: One tracked-ticker service keeps the priced set equal to watchlist ∪ held positions: watchlist add starts pricing; removing a held ticker from the watchlist keeps it priced; selling an unwatched ticker to zero stops pricing it; reset re-syncs to the default watchlist
 
 ### Market Data UI
 
-- [ ] **MD-01**: The frontend opens exactly one `EventSource` to `/api/stream/prices` and keeps one prices map for every streamed ticker, shared by all panels; the watchlist renders from `/api/watchlist`, while positions, heatmap and header read held-but-unwatched tickers from the same map (G-23)
-- [ ] **MD-02**: User sees each watchlist row's ticker, current price, and **Chg %** since session open (`(price - open_price) / open_price × 100`, computed client-side); unpriced tickers show `—`
-- [ ] **MD-03**: A watchlist price flashes green on an uptick or red on a downtick, fading over ~500ms, only when that ticker's price changed; consecutive ticks re-trigger the flash
-- [ ] **MD-04**: The header connection dot is green while the stream is open, yellow while reconnecting, and red when closed; after a permanent close the client recreates the `EventSource` with capped backoff (1s → 2s → 5s) and turns green once it reopens (G-01)
-- [ ] **MD-05**: User sees a sparkline (inline SVG polyline, no library) beside each watchlist ticker, accumulated from SSE since page load, capped to a fixed recent window, and cleared on reset (G-02)
+- [x] **MD-01**: The frontend opens exactly one `EventSource` to `/api/stream/prices` and keeps one prices map for every streamed ticker, shared by all panels; the watchlist renders from `/api/watchlist`, while positions, heatmap and header read held-but-unwatched tickers from the same map (G-23)
+- [x] **MD-02**: User sees each watchlist row's ticker, current price, and **Chg %** since session open (`(price - open_price) / open_price × 100`, computed client-side); unpriced tickers show `—`
+- [x] **MD-03**: A watchlist price flashes green on an uptick or red on a downtick, fading over ~500ms, only when that ticker's price changed; consecutive ticks re-trigger the flash
+- [x] **MD-04**: The header connection dot is green while the stream is open, yellow while reconnecting, and red when closed; after a permanent close the client recreates the `EventSource` with capped backoff (1s → 2s → 5s) and turns green once it reopens (G-01)
+- [x] **MD-05**: User sees a sparkline (inline SVG polyline, no library) beside each watchlist ticker, accumulated from SSE since page load, capped to a fixed recent window, and cleared on reset (G-02)
 - [x] **MD-06**: User sees a main price chart (Lightweight Charts) for the selected ticker, seeded from `GET /api/prices/{ticker}/history` and extended with SSE points; out-of-order points are dropped and the time axis shows local `HH:MM:SS` (G-04)
-- [ ] **MD-07**: User can click a watchlist row to chart it; on load the first watchlist ticker is selected; removing the selected ticker selects the first remaining one (or an empty state); reset selects the first default ticker (G-05)
+- [x] **MD-07**: User can click a watchlist row to chart it; on load the first watchlist ticker is selected; removing the selected ticker selects the first remaining one (or an empty state); reset selects the first default ticker (G-05)
 - [ ] **MD-08** *(extra)*: User can click a positions-table row or a heatmap tile to chart that ticker
 
 ### Portfolio
@@ -90,7 +90,7 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 
 ### Visual Design
 
-- [ ] **UX-01**: The UI uses a Tailwind custom dark theme (backgrounds `#0d1117` / `#1a1a2e`, muted gray borders, no pure black, accent yellow `#ecad0a`, blue `#209dd7`, purple `#753991` submit buttons) with tabular numerals so ticking digits don't jitter
+- [x] **UX-01**: The UI uses a Tailwind custom dark theme (backgrounds `#0d1117` / `#1a1a2e`, muted gray borders, no pure black, accent yellow `#ecad0a`, blue `#209dd7`, purple `#753991` submit buttons) with tabular numerals so ticking digits don't jitter
 - [ ] **UX-02**: The layout is a dense, desktop-first terminal grid showing header, watchlist, main chart, heatmap, P&L chart, positions, trade bar and chat panel at once on a wide screen, and stays usable on a tablet
 
 ### Testing
@@ -153,14 +153,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| OPS-01 | Phase 1 | Pending |
-| OPS-02 | Phase 1 | Pending |
-| OPS-03 | Phase 1 | Pending |
-| OPS-04 | Phase 1 | Pending |
-| OPS-05 | Phase 1 | Pending |
-| OPS-06 | Phase 1 | Pending |
-| OPS-07 | Phase 1 | Pending |
-| OPS-08 | Phase 1 | Pending |
+| OPS-01 | Phase 1 | Complete |
+| OPS-02 | Phase 1 | Complete |
+| OPS-03 | Phase 1 | Complete |
+| OPS-04 | Phase 1 | Complete |
+| OPS-05 | Phase 1 | Complete |
+| OPS-06 | Phase 1 | Complete |
+| OPS-07 | Phase 1 | Complete |
+| OPS-08 | Phase 1 | Complete |
 | TRD-01 | Phase 2 | Pending |
 | TRD-02 | Phase 2 | Pending |
 | TRD-03 | Phase 2 | Pending |
@@ -171,19 +171,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRD-08 | Phase 2 | Pending |
 | TRD-09 | Phase 2 | Pending |
 | TRD-10 | Phase 2 | Pending |
-| WL-01 | Phase 1 | Pending |
-| WL-02 | Phase 1 | Pending |
-| WL-03 | Phase 1 | Pending |
-| WL-04 | Phase 1 | Pending |
-| WL-05 | Phase 1 | Pending |
+| WL-01 | Phase 1 | Complete |
+| WL-02 | Phase 1 | Complete |
+| WL-03 | Phase 1 | Complete |
+| WL-04 | Phase 1 | Complete |
+| WL-05 | Phase 1 | Complete |
 | WL-06 | Phase 2 | Pending |
-| MD-01 | Phase 1 | Pending |
-| MD-02 | Phase 1 | Pending |
-| MD-03 | Phase 1 | Pending |
-| MD-04 | Phase 1 | Pending |
-| MD-05 | Phase 1 | Pending |
+| MD-01 | Phase 1 | Complete |
+| MD-02 | Phase 1 | Complete |
+| MD-03 | Phase 1 | Complete |
+| MD-04 | Phase 1 | Complete |
+| MD-05 | Phase 1 | Complete |
 | MD-06 | Phase 1 | Complete |
-| MD-07 | Phase 1 | Pending |
+| MD-07 | Phase 1 | Complete |
 | MD-08 | Phase 2 | Pending |
 | PF-01 | Phase 2 | Pending |
 | PF-02 | Phase 2 | Pending |
@@ -211,7 +211,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AI-14 | Phase 3 | Pending |
 | AI-15 | Phase 3 | Pending |
 | AI-16 | Phase 3 | Pending |
-| UX-01 | Phase 1 | Pending |
+| UX-01 | Phase 1 | Complete |
 | UX-02 | Phase 3 | Pending |
 | TST-01 | Phase 3 | Pending |
 | TST-02 | Phase 3 | Pending |
