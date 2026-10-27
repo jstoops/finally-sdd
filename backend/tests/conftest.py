@@ -83,7 +83,9 @@ def make_app(settings) -> Callable[..., FastAPI]:
             static_dir=static_dir or settings.static_dir,
             dev_cors_origin=dev_cors_origin,
         )
-        return create_app(app_settings, source_factory=source_factory or simulator_factory, **kwargs)
+        return create_app(
+            app_settings, source_factory=source_factory or simulator_factory, **kwargs
+        )
 
     return _make
 
