@@ -1,0 +1,9 @@
+# UI-audit captures
+*.png
+*.webp
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+interaction/
