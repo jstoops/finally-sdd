@@ -1,7 +1,9 @@
 """Tests for the app factory: lifespan startup, seed-once, watchlist and static serving."""
 
+import asyncio
 import re
 import sqlite3
+import time
 from contextlib import closing
 from pathlib import Path
 
@@ -142,6 +144,54 @@ class TestLifespan:
         started = source2.started[0]
         assert started.count("AAPL") == 1
         assert started == [*DEFAULT_WATCHLIST, "PYPL"]
+
+
+class TestSnapshotLifespan:
+    def test_initial_snapshot_recorded_before_first_request(
+        self, tmp_path, make_app, recording_source
+    ):
+        source = recording_source()
+        app = make_app(source_factory=lambda cache: source, snapshot_interval=3600)
+        with TestClient(app) as client:
+            rows = run_sql(tmp_path, "SELECT total_value, recorded_at FROM portfolio_snapshots")
+            assert len(rows) == 1
+            assert rows[0][0] == 10000.0
+            assert ISO_RE.match(rows[0][1])
+            assert source.started == [list(DEFAULT_WATCHLIST)]
+            assert client.get("/api/health").status_code == 200
+            assert run_sql(tmp_path, "SELECT COUNT(*) FROM portfolio_snapshots") == [(1,)]
+
+    def test_state_lock_and_named_task_on_app_state(self, make_app, recording_source):
+        source = recording_source()
+        app = make_app(source_factory=lambda cache: source, snapshot_interval=3600)
+        with TestClient(app):
+            assert isinstance(app.state.state_lock, asyncio.Lock)
+            assert app.state.snapshot_task.get_name() == "snapshot-loop"
+            assert not app.state.snapshot_task.done()
+
+    def test_periodic_snapshots(self, tmp_path, make_app, recording_source):
+        source = recording_source()
+        app = make_app(source_factory=lambda cache: source, snapshot_interval=0.05)
+        with TestClient(app):
+            time.sleep(0.4)
+        (count,) = run_sql(tmp_path, "SELECT COUNT(*) FROM portfolio_snapshots")[0]
+        assert count >= 3
+
+    def test_shutdown_cancels_snapshot_task_before_source_stop(self, make_app, recording_source):
+        observed: list[bool] = []
+
+        class StopProbe(recording_source):
+            async def stop(self) -> None:
+                observed.append(app.state.snapshot_task.done())
+                await super().stop()
+
+        source = StopProbe()
+        app = make_app(source_factory=lambda cache: source, snapshot_interval=3600)
+        with TestClient(app):
+            pass
+        assert observed == [True]
+        assert app.state.snapshot_task.cancelled()
+        assert source.stopped == 1
 
 
 class TestDatabase:
