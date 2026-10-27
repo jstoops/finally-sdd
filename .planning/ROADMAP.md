@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. User can add a ticker from the watchlist panel (it starts pricing immediately in simulator mode) and remove one; re-adding a watched ticker is harmless, a malformed symbol or a 51st ticker shows a clear error, and watchlist edits survive a stop and start because the database lives in the `finally-data` volume and seeding never duplicates or overwrites rows.
   5. The header dot is green while streaming, yellow while reconnecting and red when closed, and turns green again on its own once the server is back; `GET /api/health` returns `{"status": "ok"}` and drives the compose healthcheck, and any unknown `/api/*` path returns a JSON 404 rather than the terminal page.
 
-**Plans**: 5/7 plans executed
+**Plans**: 7/7 plans executed
 
 Plans:
 **Wave 1**
@@ -48,8 +48,8 @@ Plans:
 - [x] 01-05-PLAN.md — Terminal grid, reconnecting stream with connection dot, dense rows (flash, Chg %, sparkline, selection)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 01-06-PLAN.md — Main Lightweight Charts price chart: history seed, live append, Open line, loading/empty states
-- [ ] 01-07-PLAN.md — Watchlist add input and row × remove wired to the API, shared client regex, inline errors
+- [x] 01-06-PLAN.md — Main Lightweight Charts price chart: history seed, live append, Open line, loading/empty states
+- [x] 01-07-PLAN.md — Watchlist add input and row × remove wired to the API, shared client regex, inline errors
 
 **UI hint**: yes
 
@@ -111,6 +111,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Live Market Terminal | 5/7 | In Progress | - |
+| 1. Live Market Terminal | 7/7 | In Progress | - |
 | 2. Trading and Live Portfolio | 0/TBD | Not started | - |
 | 3. AI Copilot and Complete Terminal | 0/TBD | Not started | - |
