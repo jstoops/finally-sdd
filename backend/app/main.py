@@ -15,9 +15,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import create_watchlist_router
+from .api import create_system_router, create_watchlist_router
 from .config import Settings, configure_logging
 from .db import Database
 from .market import MarketDataSource, PriceCache, create_market_data_source, create_stream_router
@@ -59,11 +61,39 @@ def create_app(
     app.state.source = source
     app.state.db = db
 
+    # D-13: CORS only for the `next dev` loop; never enabled by default or in Docker.
+    if settings.dev_cors_origin:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[settings.dev_cors_origin],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        logger.info("App: dev CORS enabled for %s", settings.dev_cors_origin)
+
     # No GZip middleware: it would buffer the SSE stream.
     app.include_router(create_stream_router(cache))
     app.include_router(create_watchlist_router(watchlist))
+    app.include_router(create_system_router())
+    install_api_not_found(app)  # after every /api router
     mount_static(app, settings.static_dir)  # last: "/" would shadow anything after it
     return app
+
+
+def install_api_not_found(app: FastAPI) -> None:
+    """Answer unmatched /api/* paths with a JSON 404, never the frontend's index.html.
+
+    All methods are listed so e.g. POST /api/unknown doesn't fall through to
+    StaticFiles (405). Side effect: a wrong method on a real /api route is a 404.
+    """
+
+    @app.api_route(
+        "/api/{path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        include_in_schema=False,
+    )
+    async def api_not_found(path: str) -> JSONResponse:
+        return JSONResponse({"error": "Not found"}, status_code=404)
 
 
 def mount_static(app: FastAPI, static_dir: str) -> None:
