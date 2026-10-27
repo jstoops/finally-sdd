@@ -269,3 +269,64 @@ class TestConcurrency:
     async def test_service_exposes_its_lock(self, service):
         svc, _, _, _ = service
         assert isinstance(svc.lock, asyncio.Lock)
+
+
+@pytest.fixture
+async def flaky_service(tmp_path, recording_source):
+    """A WatchlistService whose source fails the next add/remove call when told to.
+
+    Yields (service, db, source, fail) where `fail` is a set of method names
+    ("add_ticker", "remove_ticker") that raise once and are then cleared.
+    """
+    db = Database(str(tmp_path / "f.db"))
+    db.init()
+    source = recording_source()
+    await source.start(db.tracked_tickers())
+    fail: set[str] = set()
+
+    def flaky(name):
+        real = getattr(source, name)
+
+        async def call(ticker):
+            if name in fail:
+                fail.discard(name)
+                raise RuntimeError(f"{name} boom")
+            await real(ticker)
+
+        return call
+
+    source.add_ticker = flaky("add_ticker")
+    source.remove_ticker = flaky("remove_ticker")
+    svc = WatchlistService(db, PriceCache(), TickerTracker(db, source), asyncio.Lock())
+    yield svc, db, source, fail
+
+
+class TestReconcileFailure:
+    """WR-01: a committed change is never reported as a failure, and a retry heals it."""
+
+    async def test_failed_reconcile_on_add_is_not_an_error(self, flaky_service):
+        svc, db, source, fail = flaky_service
+        fail.add("add_ticker")
+        entry, created = await svc.add("ZZZ")
+        assert created and entry["ticker"] == "ZZZ"
+        assert "ZZZ" in watched(db.path)
+        assert "ZZZ" not in source.get_tickers()  # the source call failed
+
+    async def test_readd_heals_a_failed_reconcile(self, flaky_service):
+        svc, db, source, fail = flaky_service
+        fail.add("add_ticker")
+        await svc.add("ZZZ")
+        _, created = await svc.add("zzz")  # the natural retry
+        assert created is False
+        assert "ZZZ" in source.get_tickers()
+        assert set(source.get_tickers()) == set(db.tracked_tickers())
+
+    async def test_failed_reconcile_on_remove_is_not_an_error(self, flaky_service):
+        svc, db, source, fail = flaky_service
+        fail.add("remove_ticker")
+        await svc.remove("AAPL")
+        assert "AAPL" not in watched(db.path)
+        assert "AAPL" in source.get_tickers()  # stale until the next reconcile
+        await svc.add("AAPL")  # any later mutation reconciles again
+        await svc.remove("AAPL")
+        assert "AAPL" not in source.get_tickers()

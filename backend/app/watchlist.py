@@ -25,7 +25,8 @@ class WatchlistService:
     Prices come from the shared PriceCache (already rounded to 2 dp there) and are
     passed through unchanged; both are None until the ticker has a cached price.
     Mutations run under the shared state lock and reconcile the tracked tickers
-    before the lock is released.
+    before the lock is released. A reconcile failure is logged, not raised: the
+    database change has already committed, and the next reconcile heals the source.
     """
 
     def __init__(
@@ -60,7 +61,9 @@ class WatchlistService:
             row, created = await asyncio.to_thread(self._add_tx, ticker)
             if created:
                 logger.info("Watchlist: added %s", ticker)
-                await self._tracker.reconcile()  # the simulator prices it right away
+            # On every add, not only on creation: reconcile is idempotent, so a re-add
+            # also heals a source that failed to pick up an earlier, committed add.
+            await self._reconcile("adding", ticker)  # the simulator prices it right away
             return self._entry(*row), created
 
     async def remove(self, raw: str) -> None:
@@ -71,9 +74,20 @@ class WatchlistService:
             if not deleted:
                 raise NotFoundError(f"{ticker} is not on your watchlist")
             logger.info("Watchlist: removed %s", ticker)
-            await self._tracker.reconcile()  # a held ticker stays tracked
+            await self._reconcile("removing", ticker)  # a held ticker stays tracked
 
     # --- Internals ---
+
+    async def _reconcile(self, action: str, ticker: str) -> None:
+        """Reconcile tracked tickers after a committed change, without failing the request.
+
+        The database change is already committed, so a source error must not turn it
+        into a 500. The next mutation's reconcile repairs the source's ticker set.
+        """
+        try:
+            await self._tracker.reconcile()
+        except Exception:
+            logger.exception("Tracker: reconcile failed after %s %s", action, ticker)
 
     def _add_tx(self, ticker: str) -> tuple[tuple[str, str], bool]:
         with self._db.transaction() as conn:
