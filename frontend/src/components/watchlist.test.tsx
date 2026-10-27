@@ -175,3 +175,118 @@ describe("AddTickerForm", () => {
     expect(rowTickers()).toHaveLength(4);
   });
 });
+
+describe("remove button", () => {
+  const remove = (ticker: string) => screen.getByTestId(`remove-${ticker}`);
+  const noContent = () => new Response(null, { status: 204 });
+
+  it("renders a labelled remove button in every row", () => {
+    stubFetch(noContent);
+    renderWatchlist();
+    for (const { ticker } of ENTRIES) {
+      const button = remove(ticker);
+      expect(button.tagName.toLowerCase()).toBe("button");
+      expect(button).toHaveAttribute("type", "button");
+      expect(button).toHaveAttribute("aria-label", `Remove ${ticker}`);
+      const row = screen.getByTestId(`watchlist-row-${ticker}`);
+      expect(within(row).getByTestId(`remove-${ticker}`)).toBe(button);
+    }
+  });
+
+  it("is reached with Tab right after the row's select button", async () => {
+    stubFetch(noContent);
+    const user = renderWatchlist();
+    act(() => screen.getByTestId("select-AAPL").focus());
+    await user.tab();
+    expect(remove("AAPL")).toHaveFocus();
+    await user.tab();
+    expect(screen.getByTestId("select-MSFT")).toHaveFocus();
+  });
+
+  it("shows on hover, keyboard focus and touch devices", () => {
+    stubFetch(noContent);
+    renderWatchlist();
+    expect(remove("AAPL")).toHaveClass(
+      "opacity-0",
+      "group-hover:opacity-100",
+      "focus-visible:opacity-100",
+      "[@media(hover:none)]:opacity-100",
+      "text-muted",
+      "hover:text-down",
+    );
+  });
+
+  it("DELETEs an unselected ticker in one click and keeps the selection", async () => {
+    const fetchMock = stubFetch(noContent);
+    const user = renderWatchlist();
+    expect(useWatchlist.getState().selected).toBe("AAPL");
+    await user.click(remove("MSFT"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/watchlist/MSFT");
+    expect(init?.method).toBe("DELETE");
+    expect(rowTickers()).toEqual(["watchlist-row-AAPL", "watchlist-row-NVDA"]);
+    expect(useWatchlist.getState().selected).toBe("AAPL");
+    expect(screen.getByTestId("select-AAPL")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("never selects the row it removes", async () => {
+    let release: (res: Response) => void = () => {};
+    stubFetch(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = renderWatchlist();
+    await user.click(remove("MSFT"));
+    expect(screen.getByTestId("select-MSFT")).toHaveAttribute("aria-pressed", "false");
+    expect(useWatchlist.getState().selected).toBe("AAPL");
+    await act(async () => release(noContent()));
+    expect(rowTickers()).toEqual(["watchlist-row-AAPL", "watchlist-row-NVDA"]);
+  });
+
+  it("selects the first remaining ticker when the selected one is removed", async () => {
+    stubFetch(noContent);
+    const user = renderWatchlist();
+    await user.click(remove("AAPL"));
+    expect(useWatchlist.getState().selected).toBe("MSFT");
+    expect(screen.getByTestId("select-MSFT")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("leaves nothing selected when the last ticker is removed", async () => {
+    stubFetch(noContent);
+    const user = renderWatchlist([entry("AAPL")]);
+    await user.click(remove("AAPL"));
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    expect(useWatchlist.getState().selected).toBeNull();
+  });
+
+  it("drops a stale row on 404 without an error", async () => {
+    stubFetch(() => jsonResponse({ error: "MSFT is not on your watchlist" }, 404));
+    const user = renderWatchlist();
+    await user.click(remove("MSFT"));
+    expect(rowTickers()).toEqual(["watchlist-row-AAPL", "watchlist-row-NVDA"]);
+    expect(screen.queryByTestId("add-ticker-error")).toBeNull();
+  });
+
+  it("keeps the row and shows the message inline on other failures", async () => {
+    stubFetch(() => jsonResponse({ error: "Something went wrong" }, 500));
+    const user = renderWatchlist();
+    await user.click(remove("MSFT"));
+    expect(rowTickers()).toHaveLength(3);
+    expect(screen.getByTestId("add-ticker-error")).toHaveTextContent("Something went wrong");
+  });
+
+  it("shows the network message when the server is unreachable", async () => {
+    stubFetch(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    const user = renderWatchlist();
+    await user.click(remove("MSFT"));
+    expect(rowTickers()).toHaveLength(3);
+    expect(screen.getByTestId("add-ticker-error")).toHaveTextContent(
+      "Could not reach the server. Try again.",
+    );
+  });
+});
