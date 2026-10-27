@@ -10,6 +10,25 @@ import { SPARK_MAX, usePrices } from "@/store/prices";
 import { useWatchlist } from "@/store/watchlist";
 import { FakeEventSource } from "@/test/FakeEventSource";
 
+// jsdom has no canvas; the chart panel's behavior is covered in ChartPanel.test.tsx.
+vi.mock("lightweight-charts", async (importOriginal) => {
+  const series = {
+    setData: vi.fn(),
+    update: vi.fn(),
+    createPriceLine: vi.fn(() => ({ applyOptions: vi.fn() })),
+    removePriceLine: vi.fn(),
+  };
+  const chart = {
+    addSeries: vi.fn(() => series),
+    timeScale: vi.fn(() => ({ fitContent: vi.fn() })),
+    remove: vi.fn(),
+  };
+  return {
+    ...(await importOriginal<typeof import("lightweight-charts")>()),
+    createChart: vi.fn(() => chart),
+  };
+});
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -315,7 +334,11 @@ describe("Terminal", () => {
     render(<Terminal />);
     await act(async () => {});
     expect(FakeEventSource.open()).toHaveLength(1);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // The chart panel also requests the selected ticker's history; count watchlist loads only.
+    const watchlistCalls = fetchMock.mock.calls.filter(
+      (call) => String((call as unknown[])[0]) === "/api/watchlist",
+    );
+    expect(watchlistCalls).toHaveLength(1);
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
   });
 

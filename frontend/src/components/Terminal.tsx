@@ -6,6 +6,7 @@
 //   md-xl: watchlist | center, with chat moved under the center column; the page scrolls
 import { useEffect } from "react";
 
+import { ChartPanel } from "@/components/ChartPanel";
 import { Header } from "@/components/Header";
 import { Watchlist } from "@/components/Watchlist";
 import { startPriceStream } from "@/store/prices";
@@ -35,29 +36,6 @@ function ComingSoon({
   );
 }
 
-function ChartSlot() {
-  const selected = useWatchlist((s) => s.selected);
-  const loaded = useWatchlist((s) => s.loaded);
-  const empty = useWatchlist((s) => s.entries.length === 0);
-
-  return (
-    <section
-      data-testid="panel-chart"
-      className="flex min-h-64 flex-col border border-border bg-panel xl:min-h-0"
-    >
-      <h2 className="flex items-center gap-2 border-b border-border px-2 py-1 font-mono text-xs">
-        <span className="font-semibold uppercase tracking-wide text-muted">Chart</span>
-        {selected && <span className="font-semibold text-text">{selected}</span>}
-      </h2>
-      <div data-testid="chart-slot" className="flex min-h-0 flex-1 items-center justify-center">
-        {loaded && empty && (
-          <p className="text-sm text-muted">Add a ticker to start charting</p>
-        )}
-      </div>
-    </section>
-  );
-}
-
 export function Terminal() {
   useEffect(() => {
     void useWatchlist.getState().loadWatchlist();
@@ -72,7 +50,7 @@ export function Terminal() {
           <Watchlist />
         </div>
         <div className="grid min-h-0 gap-1 grid-rows-[minmax(16rem,55fr)_minmax(10rem,25fr)_minmax(8rem,20fr)] xl:grid-rows-[55fr_25fr_20fr]">
-          <ChartSlot />
+          <ChartPanel />
           <div className="grid min-h-0 grid-cols-2 gap-1">
             <ComingSoon testId="panel-heatmap" title="Heatmap" label="Heatmap — coming in Phase 2" />
             <ComingSoon testId="panel-pnl" title="P&L" label="P&L — coming in Phase 2" />
