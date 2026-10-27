@@ -2,8 +2,10 @@
 
 // Dense watchlist (D-03): one ~28px row per ticker with price flash (MD-03), Chg % since
 // session open (MD-02), an SVG sparkline (MD-05) and selection styling (D-04, MD-07).
-import { memo } from "react";
+// The add form is pinned under the title (D-05) and shares one inline error slot (D-07, D-08).
+import { type FormEvent, memo, useState } from "react";
 
+import { sanitizeTickerInput } from "@/api/ticker";
 import type { WatchlistEntry } from "@/api/types";
 import { chgPercent, formatPct, formatPrice, signOf, sparkPoints } from "@/domain/market";
 import { usePrices } from "@/store/prices";
@@ -97,10 +99,71 @@ export const WatchlistRow = memo(function WatchlistRow({ entry }: { entry: Watch
   );
 });
 
+export function AddTickerForm({
+  error,
+  onError,
+}: {
+  error: string | null;
+  onError: (message: string | null) => void;
+}) {
+  const addTicker = useWatchlist((s) => s.addTicker);
+  const [value, setValue] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    const message = await addTicker(value);
+    setPending(false);
+    // On error the typed text stays so the user can fix it (D-07).
+    if (message === null) setValue("");
+    onError(message);
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="border-b border-border px-2 py-1" noValidate>
+      <div className="flex items-center gap-1">
+        <input
+          type="text"
+          data-testid="add-ticker-input"
+          aria-label="Add ticker"
+          placeholder="Add ticker"
+          maxLength={10}
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          onChange={(e) => {
+            setValue(sanitizeTickerInput(e.target.value));
+            onError(null);
+          }}
+          className="h-6 min-w-0 flex-1 rounded-sm border border-border bg-bg px-1.5 font-mono text-xs uppercase text-text placeholder:normal-case placeholder:text-muted focus:border-primary focus:outline-none"
+        />
+        <button
+          type="submit"
+          data-testid="add-ticker-submit"
+          aria-label="Add ticker"
+          disabled={pending}
+          className="h-6 w-6 shrink-0 rounded-sm bg-submit font-mono text-sm font-semibold leading-none text-text hover:brightness-125 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary disabled:cursor-wait disabled:opacity-50"
+        >
+          +
+        </button>
+      </div>
+      {error && (
+        <p data-testid="add-ticker-error" role="alert" className="pt-0.5 text-xs text-down">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+
 export function Watchlist() {
   const entries = useWatchlist((s) => s.entries);
   const loaded = useWatchlist((s) => s.loaded);
   const loadError = useWatchlist((s) => s.loadError);
+  // One inline error slot for client format errors and every server 400 (D-07, D-08).
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <section
@@ -110,6 +173,7 @@ export function Watchlist() {
       <h2 className="border-b border-border px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted">
         Watchlist
       </h2>
+      <AddTickerForm error={error} onError={setError} />
       {loadError && <p className="px-2 py-1 text-xs text-down">{loadError}</p>}
       <ul data-testid="watchlist" className="min-h-0 flex-1 overflow-y-auto">
         {entries.map((entry) => (
