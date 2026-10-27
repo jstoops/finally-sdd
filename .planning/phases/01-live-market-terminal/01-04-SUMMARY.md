@@ -219,3 +219,9 @@ None. No external service configuration is required.
 ---
 *Phase: 01-live-market-terminal*
 *Completed: 2026-10-27*
+
+## Self-Check: PASSED
+
+- All 8 created files and the SUMMARY exist on disk
+- Commits 954e81f, ed7eb49, 0651e96, a3d23bb are on the branch (95b2c08..HEAD)
+- Working tree clean after the SUMMARY commit
