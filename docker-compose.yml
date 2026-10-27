@@ -1,0 +1,34 @@
+# Single source of truth for the FinAlly container (PLAN section 11).
+# Start: ./scripts/start_mac.sh or scripts\start_windows.ps1 (or: docker compose up -d --build --wait)
+name: finally
+
+services:
+  app:
+    build: .
+    image: finally:latest # stable name for the start scripts' "image missing?" check
+    ports:
+      # Publishes on all host interfaces, so other machines on the local network can
+      # reach the app (it has no login). See "Security note" in README.md to keep it local.
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false # a fresh clone without .env still starts (simulator, no AI chat)
+    volumes:
+      - finally-data:/app/db
+    healthcheck:
+      # python:3.12-slim has no curl; use the interpreter that is already there.
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  finally-data:
+    name: finally-data # explicit name, otherwise Compose prefixes it with the project name
