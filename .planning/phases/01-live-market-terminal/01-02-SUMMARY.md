@@ -210,3 +210,9 @@ None - no external service configuration required.
 ---
 *Phase: 01-live-market-terminal*
 *Completed: 2026-10-27*
+
+## Self-Check: PASSED
+
+- All 14 key files and this SUMMARY exist on disk.
+- Commits 5c9db3b, c474155 and 00f69f4 are on this branch (base 10acbf6).
+- Plan verification passed: `npm --prefix frontend run build` then `pytest -q -rs` gave 169 passed and 0 skipped. Ruff check and format were clean. `npm run lint` and `npm run typecheck` exited 0. Neither lockfile changed. Exactly one file under `frontend/src` constructs an EventSource. `main.py` has no module-level `app =` and no GZipMiddleware.
