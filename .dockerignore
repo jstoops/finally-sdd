@@ -16,6 +16,10 @@ planning
 .env
 .env.*
 !.env.example
+# Developer env files below the root (`.env.*` above only matches the root).
+# next build reads .env*.local, so a local NEXT_PUBLIC_API_BASE would leak into the bundle.
+**/.env*.local
+frontend/.env.development
 
 # Local data: the SQLite file lives in the finally-data volume
 db
