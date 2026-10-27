@@ -3,7 +3,7 @@
 // Dense watchlist (D-03): one ~28px row per ticker with price flash (MD-03), Chg % since
 // session open (MD-02), an SVG sparkline (MD-05) and selection styling (D-04, MD-07).
 // The add form is pinned under the title (D-05) and shares one inline error slot (D-07, D-08).
-import { type FormEvent, memo, useState } from "react";
+import { type FormEvent, type MouseEvent, memo, useState } from "react";
 
 import { sanitizeTickerInput } from "@/api/ticker";
 import type { WatchlistEntry } from "@/api/types";
@@ -48,12 +48,20 @@ export function Sparkline({
   );
 }
 
-export const WatchlistRow = memo(function WatchlistRow({ entry }: { entry: WatchlistEntry }) {
+export const WatchlistRow = memo(function WatchlistRow({
+  entry,
+  onError,
+}: {
+  entry: WatchlistEntry;
+  /** Reports a failed remove through the panel's single inline error slot. */
+  onError: (message: string | null) => void;
+}) {
   const { ticker } = entry;
   const tick = usePrices((s) => s.ticks[ticker]);
   const spark = usePrices((s) => s.spark[ticker]) ?? EMPTY;
   const selected = useWatchlist((s) => s.selected === ticker);
   const select = useWatchlist((s) => s.select);
+  const removeTicker = useWatchlist((s) => s.removeTicker);
 
   const price = tick?.price ?? entry.price;
   const open = tick?.open_price ?? entry.open_price;
@@ -64,14 +72,21 @@ export const WatchlistRow = memo(function WatchlistRow({ entry }: { entry: Watch
   const flash = tick && tick.direction !== "flat" ? `flash-${tick.direction}` : "";
   const rising = price !== null && open !== null && price >= open;
 
+  async function onRemove(event: MouseEvent<HTMLButtonElement>) {
+    // One click, no confirmation, and never a selection of this row (D-06).
+    event.stopPropagation();
+    const message = await removeTicker(ticker);
+    if (message !== null) onError(message);
+  }
+
   return (
-    <li data-testid={`watchlist-row-${ticker}`} className="group relative">
+    <li data-testid={`watchlist-row-${ticker}`} className="group relative flex items-center">
       <button
         type="button"
         data-testid={`select-${ticker}`}
         aria-pressed={selected}
         onClick={() => select(ticker)}
-        className={`grid h-7 w-full grid-cols-[minmax(0,1fr)_4rem_3.5rem_64px] items-center gap-1 border-l-2 px-2 text-left font-mono text-xs hover:bg-white/5 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary ${
+        className={`grid h-7 min-w-0 flex-1 grid-cols-[minmax(0,1fr)_4rem_3.5rem_64px] items-center gap-1 border-l-2 px-2 text-left font-mono text-xs hover:bg-white/5 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary ${
           selected ? "border-primary bg-primary/10" : "border-transparent"
         }`}
       >
@@ -94,6 +109,17 @@ export const WatchlistRow = memo(function WatchlistRow({ entry }: { entry: Watch
           {formatPct(chg)}
         </span>
         <Sparkline ticker={ticker} values={spark} rising={rising} />
+      </button>
+      {/* Hidden until row hover or keyboard focus; always shown where there is no hover. */}
+      <button
+        type="button"
+        data-testid={`remove-${ticker}`}
+        aria-label={`Remove ${ticker}`}
+        title={`Remove ${ticker}`}
+        onClick={onRemove}
+        className="flex h-7 w-5 shrink-0 items-center justify-center font-mono text-sm leading-none text-muted opacity-0 hover:text-down focus-visible:opacity-100 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+      >
+        ×
       </button>
     </li>
   );
@@ -177,7 +203,7 @@ export function Watchlist() {
       {loadError && <p className="px-2 py-1 text-xs text-down">{loadError}</p>}
       <ul data-testid="watchlist" className="min-h-0 flex-1 overflow-y-auto">
         {entries.map((entry) => (
-          <WatchlistRow key={entry.ticker} entry={entry} />
+          <WatchlistRow key={entry.ticker} entry={entry} onError={setError} />
         ))}
       </ul>
       {loaded && !loadError && entries.length === 0 && (

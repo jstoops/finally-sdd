@@ -24,6 +24,8 @@ interface WatchlistState {
   loadWatchlist: () => Promise<void>;
   /** POST /api/watchlist. Resolves to an inline error message, or null on success. */
   addTicker: (raw: string) => Promise<string | null>;
+  /** DELETE /api/watchlist/{ticker}. Resolves to an inline error message, or null on success. */
+  removeTicker: (ticker: string) => Promise<string | null>;
 }
 
 export const useWatchlist = create<WatchlistState>()((set, get) => ({
@@ -65,6 +67,26 @@ export const useWatchlist = create<WatchlistState>()((set, get) => ({
       if (!entries.some((e) => e.ticker === entry.ticker)) setEntries([...entries, entry]);
       return null;
     } catch (err) {
+      return failureMessage(err);
+    }
+  },
+  removeTicker: async (ticker) => {
+    const drop = () => {
+      const { entries, setEntries } = get();
+      // setEntries reconciles the selection: removing the selected ticker selects the first
+      // remaining one, or none when the list is empty (MD-07).
+      setEntries(entries.filter((e) => e.ticker !== ticker));
+    };
+    try {
+      await apiFetch<void>(`/api/watchlist/${encodeURIComponent(ticker)}`, { method: "DELETE" });
+      drop();
+      return null;
+    } catch (err) {
+      // 404: the server already lacks it, so the row is stale.
+      if (err instanceof ApiError && err.status === 404) {
+        drop();
+        return null;
+      }
       return failureMessage(err);
     }
   },
