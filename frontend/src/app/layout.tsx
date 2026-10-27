@@ -5,7 +5,7 @@ import "./globals.css";
 // `next build`, a network dependency inside Docker.
 export const metadata: Metadata = {
   title: "FinAlly — AI Trading Workstation",
-  description: "Live market data, a simulated portfolio and an AI trading copilot.",
+  description: "Streaming prices, a simulated portfolio and an AI trading copilot.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
