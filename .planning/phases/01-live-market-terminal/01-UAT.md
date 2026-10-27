@@ -3,7 +3,7 @@ status: complete
 phase: 01-live-market-terminal
 source: [01-VERIFICATION.md]
 started: 2026-10-27T16:17:58.527Z
-updated: 2026-10-27T16:28:48.561Z
+updated: 2026-10-27T16:55:13.392Z
 ---
 
 ## Current Test
@@ -30,7 +30,8 @@ result: pass
 
 ### 5. Run `./scripts/start_mac.sh` on macOS or Linux with a desktop session
 expected: Browser opens to http://localhost:8000 (open / xdg-open path); script is harmless on a second run
-result: skipped — no macOS/Linux desktop available to the tester
+result: skipped
+reason: "Deferred follow-up: verify start_mac.sh browser launch (open/xdg-open) and safe re-run on a macOS/Linux desktop; no such desktop was available to the tester"
 
 ## Summary
 
@@ -50,3 +51,9 @@ blocked: 0
   test: 2
   artifacts: [scripts/start_windows.ps1, scripts/start_mac.sh, README.md]
   missing: ["either rebuild when sources are newer than the image, or make the README quick start say to pass --build after pulling changes"]
+
+## Deferred Follow-Ups
+
+- test: 5
+  idea: "Verify start_mac.sh browser launch (open/xdg-open) and safe re-run on a macOS/Linux desktop"
+  deferred_at: 2026-10-27
