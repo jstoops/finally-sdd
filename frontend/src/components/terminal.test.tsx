@@ -348,6 +348,73 @@ describe("Terminal", () => {
     expect(screen.getByTestId("panel-chart")).toHaveTextContent("Add a ticker to start charting");
   });
 
+  it("shows the generic network message when the first load cannot reach the server", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("Failed to fetch");
+      }),
+    );
+    render(<Terminal />);
+    await act(async () => {});
+    expect(screen.getByText("Could not reach the server. Try again.")).toHaveClass("text-down");
+    expect(screen.queryByText("Failed to fetch")).toBeNull();
+  });
+
+  it("re-fetches a failed first load once the stream opens", async () => {
+    // WR-04: the backend was down at mount; the stream opening means it is back.
+    let up = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (!up) throw new TypeError("Failed to fetch");
+      if (String(input) === "/api/watchlist") return jsonResponse({ tickers: ENTRIES });
+      return jsonResponse({ ticker: "AAPL", points: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Terminal />);
+    await act(async () => {});
+    expect(screen.getByText("Could not reach the server. Try again.")).toBeInTheDocument();
+
+    up = true;
+    await act(async () => FakeEventSource.latest().emitOpen());
+    expect(screen.queryByText("Could not reach the server. Try again.")).toBeNull();
+    expect(screen.getAllByRole("listitem")).toHaveLength(3);
+  });
+
+  it("re-fetches the watchlist when the stream reconnects, not on the first open", async () => {
+    const fetchMock = stubFetch({ tickers: ENTRIES });
+    render(<Terminal />);
+    await act(async () => {});
+    const watchlistLoads = () =>
+      fetchMock.mock.calls.filter((call) => String((call as unknown[])[0]) === "/api/watchlist")
+        .length;
+
+    const es = FakeEventSource.latest();
+    await act(async () => es.emitOpen());
+    expect(watchlistLoads()).toBe(1);
+
+    await act(async () => es.emitError(FakeEventSource.CONNECTING));
+    await act(async () => es.emitOpen());
+    expect(watchlistLoads()).toBe(2);
+
+    // Frames while open are not reconnects.
+    emit(frameOf(tick("AAPL", 191, 1)));
+    await act(async () => {});
+    expect(watchlistLoads()).toBe(2);
+  });
+
+  it("stops listening for reconnects after unmount", async () => {
+    const fetchMock = stubFetch({ tickers: ENTRIES });
+    const { unmount } = render(<Terminal />);
+    await act(async () => {});
+    unmount();
+    const calls = fetchMock.mock.calls.length;
+    act(() => usePrices.setState({ status: "open" }));
+    act(() => usePrices.setState({ status: "connecting" }));
+    act(() => usePrices.setState({ status: "open" }));
+    await act(async () => {});
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
   it("shows a load error inline", async () => {
     stubFetch({ error: "Backend unavailable" }, 500);
     render(<Terminal />);

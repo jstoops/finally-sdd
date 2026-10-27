@@ -48,8 +48,8 @@ export const useWatchlist = create<WatchlistState>()((set, get) => ({
       get().setEntries(data.tickers);
       set({ loaded: true, loadError: null });
     } catch (err) {
-      const message = err instanceof Error && err.message ? err.message : "Could not load watchlist";
-      set({ loaded: true, loadError: message });
+      // Same wording as add/remove: the server's error text, or the generic network message.
+      set({ loaded: true, loadError: failureMessage(err) });
     }
   },
   addTicker: async (raw) => {
