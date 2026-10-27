@@ -220,6 +220,11 @@ None. No external service configuration is required.
 - Phase success criterion 3 (the chart shows about 5 minutes of history and extends live with local HH:MM:SS) is met in tests. It still needs the plan's human-check in a browser at the end of the phase.
 - When 01-07 lands watchlist add/remove, removing the selected ticker changes `selected`, and `ChartPanel` already handles that by clearing, removing the Open line, and showing Loading or the empty state.
 
+## Self-Check: PASSED
+
+- All 4 created files exist; the SUMMARY exists.
+- Commits 0f864b7, 9623308, 24a0c09 and cf1197e are on this branch (`git log 23f7eaa..HEAD`).
+
 ---
 *Phase: 01-live-market-terminal*
 *Completed: 2026-10-27*
