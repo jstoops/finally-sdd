@@ -1,6 +1,6 @@
-import { act, render } from "@testing-library/react";
-import { AreaSeries } from "lightweight-charts";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { AreaSeries, LineStyle } from "lightweight-charts";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import type { HistoryPoint, PriceFrame, PriceTick, WatchlistEntry } from "@/api/types";
 import { ChartPanel } from "@/components/ChartPanel";
@@ -106,6 +106,7 @@ async function renderSelected(selected: string | null = "AAPL", entries = ENTRIE
 
 beforeEach(() => {
   vi.clearAllMocks();
+  lw.series.createPriceLine.mockImplementation(() => ({ applyOptions: vi.fn() }));
   usePrices.setState({ ticks: {}, lastTs: {}, spark: {}, status: "open" });
   useWatchlist.setState({ entries: [], loaded: false, loadError: null, selected: null });
 });
@@ -217,5 +218,114 @@ describe("ChartPanel live append", () => {
     emit(tick("AAPL", 191, 300), tick("MSFT", 402, 201, 400));
     expect(lw.series.update).toHaveBeenCalledTimes(1);
     expect(lw.series.update).toHaveBeenLastCalledWith({ time: 201, value: 402 });
+  });
+});
+
+describe("ChartPanel header (D-10)", () => {
+  it("shows the ticker, live price and colored Chg %", async () => {
+    await renderSelected();
+    expect(screen.getByTestId("chart-title")).toHaveTextContent(/^AAPL$/);
+    expect(screen.getByTestId("chart-title")).toHaveClass("font-mono");
+
+    emit(tick("AAPL", 190.52, 102, 190));
+    expect(screen.getByTestId("chart-price")).toHaveTextContent(/^190\.52$/);
+    expect(screen.getByTestId("chart-price")).toHaveClass("tabular-nums");
+    const up = screen.getByTestId("chart-chg");
+    expect(up).toHaveTextContent(/^\+0\.27%$/);
+    expect(up).toHaveAttribute("data-sign", "up");
+    expect(up).toHaveClass("text-up");
+
+    emit(tick("AAPL", 188, 103, 190));
+    const down = screen.getByTestId("chart-chg");
+    expect(down).toHaveTextContent(/^-1\.05%$/);
+    expect(down).toHaveAttribute("data-sign", "down");
+    expect(down).toHaveClass("text-down");
+  });
+
+  it("falls back to the watchlist entry before the first tick", async () => {
+    await renderSelected("MSFT");
+    expect(screen.getByTestId("chart-price")).toHaveTextContent("401.50");
+    expect(screen.getByTestId("chart-chg")).toHaveTextContent("+0.38%");
+  });
+});
+
+describe("ChartPanel Open line (D-11)", () => {
+  it("draws one dashed Open line at open_price and moves it in place", async () => {
+    await renderSelected();
+    await resolveHistory("AAPL", AAPL_POINTS);
+    expect(lw.series.createPriceLine).toHaveBeenCalledTimes(1);
+    expect(lw.series.createPriceLine).toHaveBeenCalledWith(
+      expect.objectContaining({ price: 190, title: "Open", lineStyle: LineStyle.Dashed }),
+    );
+    const line = lw.series.createPriceLine.mock.results[0].value as { applyOptions: Mock };
+
+    emit(tick("AAPL", 190.4, 102, 190));
+    expect(line.applyOptions).not.toHaveBeenCalled();
+
+    emit(tick("AAPL", 190.5, 103, 191));
+    expect(line.applyOptions).toHaveBeenCalledWith({ price: 191 });
+    expect(lw.series.createPriceLine).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates the Open line when open_price first arrives after selection", async () => {
+    await renderSelected("AAPL", [entry("AAPL", null, null)]);
+    await resolveHistory("AAPL", []);
+    expect(lw.series.createPriceLine).not.toHaveBeenCalled();
+    emit(tick("AAPL", 190.2, 102, 190));
+    expect(lw.series.createPriceLine).toHaveBeenCalledTimes(1);
+    expect(lw.series.createPriceLine).toHaveBeenCalledWith(
+      expect.objectContaining({ price: 190, title: "Open" }),
+    );
+  });
+
+  it("removes the previous Open line on a ticker switch", async () => {
+    await renderSelected();
+    await resolveHistory("AAPL", AAPL_POINTS);
+    const line = lw.series.createPriceLine.mock.results[0].value;
+    act(() => useWatchlist.getState().select("MSFT"));
+    expect(lw.series.removePriceLine).toHaveBeenCalledWith(line);
+    await resolveHistory("MSFT", [{ timestamp: 200, price: 401 }]);
+    expect(lw.series.createPriceLine).toHaveBeenCalledTimes(2);
+    expect(lw.series.createPriceLine).toHaveBeenLastCalledWith(
+      expect.objectContaining({ price: 400, title: "Open" }),
+    );
+  });
+});
+
+describe("ChartPanel states (D-12)", () => {
+  const status = () => screen.queryByTestId("chart-status");
+
+  it("reads 'Loading AAPL…' while history is pending and clears once points exist", async () => {
+    await renderSelected();
+    expect(status()).toHaveTextContent("Loading AAPL…");
+    await resolveHistory("AAPL", AAPL_POINTS);
+    expect(status()).toBeNull();
+  });
+
+  it("reads 'Loading MSFT…' again after switching away from a loaded ticker", async () => {
+    await renderSelected();
+    await resolveHistory("AAPL", AAPL_POINTS);
+    act(() => useWatchlist.getState().select("MSFT"));
+    expect(status()).toHaveTextContent("Loading MSFT…");
+  });
+
+  it("asks for a ticker when the loaded watchlist is empty", async () => {
+    await renderSelected(null, []);
+    expect(status()).toHaveTextContent("Add a ticker to start charting");
+  });
+
+  it("waits for prices on an empty history until a newer tick arrives", async () => {
+    await renderSelected();
+    await resolveHistory("AAPL", []);
+    expect(status()).toHaveTextContent("Waiting for prices…");
+    emit(tick("AAPL", 190.3, 102));
+    expect(status()).toBeNull();
+    expect(lw.series.update).toHaveBeenLastCalledWith({ time: 102, value: 190.3 });
+  });
+
+  it("keeps the chart canvas container mounted under every state", async () => {
+    await renderSelected();
+    expect(screen.getByTestId("chart-canvas")).toBeInTheDocument();
+    expect(lw.chart.remove).not.toHaveBeenCalled();
   });
 });
