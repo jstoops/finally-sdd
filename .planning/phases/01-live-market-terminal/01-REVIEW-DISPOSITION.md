@@ -1,31 +1,31 @@
-| WR-05 |  | fixed | 1aa139a (01-REVIEW-FIX.md) || WR-04 |  | fixed | cbcee40 (01-REVIEW-FIX.md) || WR-03 |  | fixed | 4a93b73 (01-REVIEW-FIX.md) || WR-02 |  | fixed | 71b7447 (01-REVIEW-FIX.md) || WR-01 |  | fixed | cb3ce2b (01-REVIEW-FIX.md) || CR-01 |  | fixed | 6524d2d (01-REVIEW-FIX.md) |---
+---
 phase: 01
 review: 01-REVIEW.md
 titles: json
 findings:
   - id: CR-01
     severity: critical
-    disposition: open
+    disposition: fixed
     title: "Blank `DB_PATH` puts the Docker database outside the persistent volume (data loss)"
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "A watchlist add that commits but fails to reconcile is never repaired by a retry"
   - id: WR-02
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "`npm run typecheck` fails on a clean checkout"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The red \"disconnected\" state is effectively unreachable when the server is down"
   - id: WR-04
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The watchlist is fetched once and never recovers from a failed load"
   - id: WR-05
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Rollback can mask the original SQLite error"
   - id: IN-01
     severity: info
@@ -71,21 +71,21 @@ findings:
     severity: info
     disposition: open
     title: "A cancelled snapshot can still write after shutdown starts"
-open: 17
+open: 11
 total: 17
-recorded: 2026-10-27T16:12:50.991Z
+recorded: 2026-10-27T16:13:30.297Z
 ---
 
 # Phase 01: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| CR-01 | critical | open | - |
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
-| WR-04 | warning | open | - |
-| WR-05 | warning | open | - |
+| CR-01 | critical | fixed | 6524d2d (01-REVIEW-FIX.md) |
+| WR-01 | warning | fixed | cb3ce2b (01-REVIEW-FIX.md) |
+| WR-02 | warning | fixed | 71b7447 (01-REVIEW-FIX.md) |
+| WR-03 | warning | fixed | 4a93b73 (01-REVIEW-FIX.md) |
+| WR-04 | warning | fixed | cbcee40 (01-REVIEW-FIX.md) |
+| WR-05 | warning | fixed | 1aa139a (01-REVIEW-FIX.md) |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
