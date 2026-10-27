@@ -2,12 +2,22 @@
 //
 // Status machine: connecting (yellow) -> open (green). An error while the browser is
 // still CONNECTING means it is retrying on its own (server sent `retry: 1000`), so we
-// only report "connecting". Once readyState is CLOSED the browser never retries, so we
-// report "closed" (red) and recreate the EventSource after a capped backoff.
+// report "connecting" for a short blip. A server that is down (connection refused) keeps
+// the browser in CONNECTING forever, so after DISCONNECTED_AFTER_FAILURES consecutive
+// failed attempts with no successful open we report "closed" (red) while the browser
+// keeps retrying; the next open turns it green again. Once readyState is CLOSED the
+// browser never retries, so we report "closed" at once and recreate the EventSource
+// after a capped backoff.
 import type { PriceFrame, StreamStatus } from "@/api/types";
 
 /** Waits before recreating a CLOSED stream: 1s, 2s, then 5s for every later attempt. */
 export const BACKOFF_MS: readonly number[] = [1000, 2000, 5000];
+
+/**
+ * Consecutive failed connection attempts (errors with no open in between) after which
+ * the stream counts as disconnected (red). With `retry: 1000` this is about 3 seconds.
+ */
+export const DISCONNECTED_AFTER_FAILURES = 3;
 
 /** EventSource.CLOSED, as a literal so this module never needs the global at load time. */
 const ES_CLOSED = 2;
@@ -28,17 +38,20 @@ export function connectPriceStream(
 ): () => void {
   let es: EventSource | null = null;
   let attempt = 0;
+  let failures = 0; // consecutive errors since the last successful open
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
 
   const open = () => {
     timer = null;
     if (stopped) return;
-    opts.onStatus("connecting");
+    // A long outage stays red across recreated instances instead of flickering yellow.
+    opts.onStatus(failures >= DISCONNECTED_AFTER_FAILURES ? "closed" : "connecting");
     const source = makeEventSource(opts.url);
     es = source;
     source.onopen = () => {
       attempt = 0;
+      failures = 0;
       opts.onStatus("open");
     };
     source.onmessage = (event: MessageEvent<string>) => {
@@ -51,8 +64,10 @@ export function connectPriceStream(
       if (frame && typeof frame === "object") opts.onFrame(frame);
     };
     source.onerror = () => {
+      failures += 1;
       if (source.readyState !== ES_CLOSED) {
-        opts.onStatus("connecting");
+        // The browser retries on its own; only the reported status changes.
+        opts.onStatus(failures >= DISCONNECTED_AFTER_FAILURES ? "closed" : "connecting");
         return;
       }
       opts.onStatus("closed");

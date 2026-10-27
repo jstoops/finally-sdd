@@ -46,8 +46,8 @@ FinAlly has no login. The `8000:8000` port mapping in `docker-compose.yml` publi
 The dot in the header shows the live price stream:
 
 - **Green:** connected and streaming.
-- **Yellow:** reconnecting. Stopping the container usually shows yellow, because the browser keeps retrying every second.
-- **Red:** the stream was closed by the server.
+- **Yellow:** reconnecting after a brief drop. The browser retries every second.
+- **Red:** disconnected: three reconnect attempts in a row have failed (about 3 seconds, e.g. the container is stopped) or the server closed the stream. The browser keeps retrying.
 
 It turns green again on its own once the server is back.
 

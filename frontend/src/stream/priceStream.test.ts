@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PriceFrame, StreamStatus } from "@/api/types";
-import { BACKOFF_MS, connectPriceStream } from "@/stream/priceStream";
+import {
+  BACKOFF_MS,
+  connectPriceStream,
+  DISCONNECTED_AFTER_FAILURES,
+} from "@/stream/priceStream";
 import { FakeEventSource } from "@/test/FakeEventSource";
 
 const URL = "/api/stream/prices";
@@ -46,6 +50,50 @@ describe("connectPriceStream", () => {
     expect(statuses.at(-1)).toBe("connecting");
     expect(FakeEventSource.instances).toHaveLength(1);
     expect(FakeEventSource.latest().closed).toBe(false);
+  });
+
+  it("reports closed after repeated failed retries while the browser keeps retrying", () => {
+    // WR-03: a stopped server leaves readyState in CONNECTING forever.
+    expect(DISCONNECTED_AFTER_FAILURES).toBe(3);
+    const { statuses } = setup();
+    const es = FakeEventSource.latest();
+    es.emitOpen();
+    es.emitError(FakeEventSource.CONNECTING);
+    es.emitError(FakeEventSource.CONNECTING);
+    expect(statuses.at(-1)).toBe("connecting");
+    es.emitError(FakeEventSource.CONNECTING);
+    expect(statuses.at(-1)).toBe("closed");
+    es.emitError(FakeEventSource.CONNECTING);
+    expect(statuses.at(-1)).toBe("closed");
+    // The browser is still retrying: no recreation, no close.
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(es.closed).toBe(false);
+    // The server comes back: the next open turns it green and resets the count.
+    es.emitOpen();
+    expect(statuses.at(-1)).toBe("open");
+    es.emitError(FakeEventSource.CONNECTING);
+    expect(statuses.at(-1)).toBe("connecting");
+  });
+
+  it("counts failures from the first connect, before any open", () => {
+    const { statuses } = setup();
+    for (let i = 0; i < DISCONNECTED_AFTER_FAILURES; i += 1) {
+      FakeEventSource.latest().emitError(FakeEventSource.CONNECTING);
+    }
+    expect(statuses.at(-1)).toBe("closed");
+  });
+
+  it("a long outage stays closed across recreated instances", () => {
+    const { statuses } = setup();
+    for (let i = 0; i < DISCONNECTED_AFTER_FAILURES; i += 1) {
+      FakeEventSource.latest().emitError(FakeEventSource.CONNECTING);
+    }
+    closeLatest();
+    vi.advanceTimersByTime(BACKOFF_MS[0]);
+    expect(FakeEventSource.instances).toHaveLength(2);
+    expect(statuses.at(-1)).toBe("closed");
+    FakeEventSource.latest().emitOpen();
+    expect(statuses.at(-1)).toBe("open");
   });
 
   it("an error with readyState CLOSED reports closed and closes the old instance", () => {
