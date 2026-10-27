@@ -52,7 +52,7 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 - [ ] **MD-03**: A watchlist price flashes green on an uptick or red on a downtick, fading over ~500ms, only when that ticker's price changed; consecutive ticks re-trigger the flash
 - [ ] **MD-04**: The header connection dot is green while the stream is open, yellow while reconnecting, and red when closed; after a permanent close the client recreates the `EventSource` with capped backoff (1s → 2s → 5s) and turns green once it reopens (G-01)
 - [ ] **MD-05**: User sees a sparkline (inline SVG polyline, no library) beside each watchlist ticker, accumulated from SSE since page load, capped to a fixed recent window, and cleared on reset (G-02)
-- [ ] **MD-06**: User sees a main price chart (Lightweight Charts) for the selected ticker, seeded from `GET /api/prices/{ticker}/history` and extended with SSE points; out-of-order points are dropped and the time axis shows local `HH:MM:SS` (G-04)
+- [x] **MD-06**: User sees a main price chart (Lightweight Charts) for the selected ticker, seeded from `GET /api/prices/{ticker}/history` and extended with SSE points; out-of-order points are dropped and the time axis shows local `HH:MM:SS` (G-04)
 - [ ] **MD-07**: User can click a watchlist row to chart it; on load the first watchlist ticker is selected; removing the selected ticker selects the first remaining one (or an empty state); reset selects the first default ticker (G-05)
 - [ ] **MD-08** *(extra)*: User can click a positions-table row or a heatmap tile to chart that ticker
 
@@ -182,7 +182,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MD-03 | Phase 1 | Pending |
 | MD-04 | Phase 1 | Pending |
 | MD-05 | Phase 1 | Pending |
-| MD-06 | Phase 1 | Pending |
+| MD-06 | Phase 1 | Complete |
 | MD-07 | Phase 1 | Pending |
 | MD-08 | Phase 2 | Pending |
 | PF-01 | Phase 2 | Pending |
