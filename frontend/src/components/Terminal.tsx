@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import type { Position } from "@/api/types";
 import { ChartPanel } from "@/components/ChartPanel";
 import { Header } from "@/components/Header";
+import { PositionsTable } from "@/components/PositionsTable";
 import { TradePanel } from "@/components/TradeBar";
 import { Watchlist } from "@/components/Watchlist";
 import { usePortfolio } from "@/store/portfolio";
@@ -89,11 +90,7 @@ export function Terminal() {
             <ComingSoon testId="panel-pnl" title="P&L" label="P&L — coming in Phase 2" />
           </div>
           <div className="grid min-h-0 grid-cols-2 gap-1">
-            <ComingSoon
-              testId="panel-positions"
-              title="Positions"
-              label="Positions — coming in Phase 2"
-            />
+            <PositionsTable />
             <TradePanel />
           </div>
         </div>
