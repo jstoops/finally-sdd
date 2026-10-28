@@ -1,4 +1,4 @@
-"""Portfolio endpoints (PLAN §8): the current portfolio and market-order trades."""
+"""Portfolio endpoints (PLAN §8): the portfolio, trades, snapshot history and reset."""
 
 from __future__ import annotations
 
@@ -35,9 +35,23 @@ def create_portfolio_router(trade_service: TradeService, portfolio: PortfolioSer
         result = await trade_service.execute(body.ticker, body.quantity, body.side)
         return result.to_dict()
 
+    @router.get("/api/portfolio/history")
+    async def history() -> dict:
+        """Portfolio value snapshots for the P&L chart, oldest first (never pruned)."""
+        return {"snapshots": await portfolio.history()}
+
     @router.get("/api/trades")
     async def list_trades() -> dict:
         """The most recent trades (at most TRADES_LIMIT), newest first."""
         return {"trades": await portfolio.list_trades()}
+
+    @router.post("/api/reset")
+    async def reset() -> dict:
+        """Reset the account to its seeded state.
+
+        Takes no body and reads no headers, so any POST resets (PLAN §8, user decision U-1).
+        """
+        await portfolio.reset()
+        return {"status": "ok"}
 
     return router

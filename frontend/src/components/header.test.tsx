@@ -1,12 +1,12 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Portfolio, Position, PriceFrame } from "@/api/types";
-import { Header } from "@/components/Header";
+import { Header, RESET_CONFIRM } from "@/components/Header";
 import { usePortfolio } from "@/store/portfolio";
 import { startPriceStream, usePrices } from "@/store/prices";
 import { FakeEventSource } from "@/test/FakeEventSource";
-import { callsTo, stubApi } from "@/test/stubFetch";
+import { callsTo, jsonResponse, stubApi } from "@/test/stubFetch";
 
 beforeEach(() => {
   usePrices.setState({ ticks: {}, lastTs: {}, spark: {}, status: "connecting" });
@@ -18,11 +18,14 @@ afterEach(() => {
 });
 
 describe("Header", () => {
-  it("shows the wordmark, the connection dot and no buttons", () => {
+  it("shows the wordmark, the connection dot and exactly one button, the reset button", () => {
     render(<Header />);
     const header = screen.getByRole("banner");
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^FinAlly$/);
-    expect(header.querySelectorAll("button")).toHaveLength(0);
+    const buttons = header.querySelectorAll("button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toBe(screen.getByTestId("reset-button"));
+    expect(buttons[0]).toHaveAttribute("type", "button");
     expect(screen.getByTestId("connection-dot")).toBeInTheDocument();
   });
 
@@ -144,5 +147,89 @@ describe("Header live values", () => {
     expect(pnl).toHaveTextContent("+$0.00");
     expect(pnl).toHaveAttribute("data-sign", "flat");
     expect(pnl).toHaveClass("text-muted");
+  });
+});
+
+describe("Header reset", () => {
+  const DIRTY: Portfolio = {
+    cash_balance: 8094.8,
+    positions_value: 0,
+    total_value: 8094.8,
+    unrealized_pnl: 0,
+    positions: [],
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function reset() {
+    fireEvent.click(screen.getByTestId("reset-button"));
+  }
+
+  it("asks for confirmation and sends nothing on cancel", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const fetchMock = stubApi({ "POST /api/reset": { status: "ok" } });
+    render(<Header />);
+    await act(async () => reset());
+    expect(confirm).toHaveBeenCalledWith(RESET_CONFIRM);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("on confirm posts once, then refetches portfolio, trades, history and watchlist", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchMock = stubApi({ "POST /api/reset": { status: "ok" } });
+    render(<Header />);
+    act(() => usePortfolio.setState({ cash: DIRTY.cash_balance, positions: [] }));
+    expect(screen.getByTestId("header-cash")).toHaveTextContent("$8,094.80");
+
+    await act(async () => reset());
+    await act(async () => {});
+
+    expect(callsTo(fetchMock, "/api/reset", "POST")).toHaveLength(1);
+    expect(callsTo(fetchMock, "/api/portfolio")).toHaveLength(1);
+    expect(callsTo(fetchMock, "/api/trades")).toHaveLength(1);
+    expect(callsTo(fetchMock, "/api/portfolio/history")).toHaveLength(1);
+    expect(callsTo(fetchMock, "/api/watchlist")).toHaveLength(1);
+    const urls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(urls[0]).toBe("/api/reset");
+    expect(screen.getByTestId("header-cash")).toHaveTextContent("$10,000.00");
+    expect(screen.queryByTestId("reset-error")).toBeNull();
+    expect(screen.getByTestId("reset-button")).not.toBeDisabled();
+  });
+
+  it("disables the reset button while the request is pending", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let release: (res: Response) => void = () => {};
+    stubApi({
+      "POST /api/reset": () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    });
+    render(<Header />);
+    await act(async () => reset());
+    expect(screen.getByTestId("reset-button")).toBeDisabled();
+
+    await act(async () => release(jsonResponse({ status: "ok" })));
+    await act(async () => {});
+    expect(screen.getByTestId("reset-button")).not.toBeDisabled();
+  });
+
+  it("shows a failed reset inline and re-enables the button", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const fetchMock = stubApi({
+      "POST /api/reset": () => jsonResponse({ error: "Reset failed on the server" }, 500),
+    });
+    render(<Header />);
+    await act(async () => reset());
+    await act(async () => {});
+
+    const error = screen.getByTestId("reset-error");
+    expect(error).toHaveTextContent("Reset failed on the server");
+    expect(error).toHaveClass("text-down");
+    expect(screen.getByTestId("reset-button")).not.toBeDisabled();
+    expect(callsTo(fetchMock, "/api/portfolio")).toHaveLength(0);
+    expect(callsTo(fetchMock, "/api/watchlist")).toHaveLength(0);
   });
 });

@@ -1,11 +1,19 @@
-// Server portfolio state (cash and positions), the trade history, the loads and the trade
-// action (PF-04, TRD-07, TRD-10). Loads and trade responses share one response-sequence guard
+// Server portfolio state (cash and positions), the trade history, the P&L snapshots, the loads
+// and the trade action (PF-04, PF-08, TRD-07, TRD-10). Loads and trade responses share one response-sequence guard
 // so a stale GET /api/portfolio can never overwrite a newer trade's portfolio; the trade list
 // has its own guard so a stale GET /api/trades can never drop a newer fill.
 import { create } from "zustand";
 
 import { ApiError, apiFetch } from "@/api/client";
-import type { Portfolio, Position, Side, Trade, TradeResponse } from "@/api/types";
+import type {
+  Portfolio,
+  Position,
+  ResetResponse,
+  Side,
+  Snapshot,
+  Trade,
+  TradeResponse,
+} from "@/api/types";
 
 const NETWORK_ERROR = "Could not reach the server. Try again.";
 const LOAD_ERROR = "Could not load the portfolio.";
@@ -55,6 +63,21 @@ function claimTrades(seq: number): boolean {
   return true;
 }
 
+// Snapshot-history guard: each GET /api/portfolio/history takes its number at request time and
+// applies only if it is newer than the last applied one, so an older response resolving late
+// (the 30 s timer racing a post-trade refetch) never replaces newer snapshots.
+let historySequence = 0;
+let historyApplied = 0;
+
+/** True for a body shaped like GET /api/portfolio/history. */
+function isSnapshotList(body: unknown): body is { snapshots: Snapshot[] } {
+  return (
+    !!body &&
+    typeof body === "object" &&
+    Array.isArray((body as { snapshots?: unknown }).snapshots)
+  );
+}
+
 /** True for a body shaped like GET /api/trades. */
 function isTradeList(body: unknown): body is { trades: Trade[] } {
   return !!body && typeof body === "object" && Array.isArray((body as { trades?: unknown }).trades);
@@ -76,6 +99,12 @@ interface PortfolioState {
   tradesLoaded: boolean;
   /** GET /api/trades, applied through the trade-list sequence guard. */
   loadTrades: () => Promise<void>;
+  /** Portfolio value snapshots, oldest first (GET /api/portfolio/history). */
+  snapshots: Snapshot[];
+  /** True once a GET /api/portfolio/history has been applied. */
+  historyLoaded: boolean;
+  /** GET /api/portfolio/history, applied through the snapshot-history sequence guard. */
+  loadHistory: () => Promise<void>;
   /** Store the cash and positions of a server portfolio. */
   applyPortfolio: (portfolio: Portfolio) => void;
   /** GET /api/portfolio, applied through the sequence guard. */
@@ -84,6 +113,11 @@ interface PortfolioState {
   refresh: () => Promise<void>;
   /** POST /api/portfolio/trade. Resolves to the recorded fill, or an inline error message. */
   trade: (ticker: string, quantity: number, side: Side) => Promise<TradeOutcome>;
+  /**
+   * POST /api/reset, then refresh(). Resolves null on success, or the error message.
+   * The caller reloads the watchlist (the stores never import each other).
+   */
+  reset: () => Promise<string | null>;
 }
 
 export const usePortfolio = create<PortfolioState>()((set, get) => ({
@@ -93,6 +127,21 @@ export const usePortfolio = create<PortfolioState>()((set, get) => ({
   loadError: null,
   trades: [],
   tradesLoaded: false,
+  snapshots: [],
+  historyLoaded: false,
+  loadHistory: async () => {
+    historySequence += 1;
+    const seq = historySequence;
+    let body: unknown;
+    try {
+      body = await apiFetch<unknown>("/api/portfolio/history");
+    } catch {
+      return; // Keep the chart as is; the 30 s timer or the next trade retries.
+    }
+    if (!isSnapshotList(body) || seq <= historyApplied) return;
+    historyApplied = seq;
+    set({ snapshots: body.snapshots, historyLoaded: true });
+  },
   loadTrades: async () => {
     const seq = nextTradesSequence();
     let body: unknown;
@@ -124,7 +173,7 @@ export const usePortfolio = create<PortfolioState>()((set, get) => ({
     set({ loaded: true, loadError: null });
   },
   refresh: async () => {
-    await Promise.all([get().loadPortfolio(), get().loadTrades()]);
+    await Promise.all([get().loadPortfolio(), get().loadTrades(), get().loadHistory()]);
   },
   trade: async (ticker, quantity, side) => {
     try {
@@ -140,9 +189,20 @@ export const usePortfolio = create<PortfolioState>()((set, get) => ({
         if (!trades.some((t) => t.id === fill.id)) set({ trades: [fill, ...trades] });
       }
       void get().loadTrades();
+      // Each fill writes a snapshot, so the P&L chart gains a point (PF-08).
+      void get().loadHistory();
       return { trade: fill };
     } catch (err) {
       return { error: failureMessage(err) };
     }
+  },
+  reset: async () => {
+    try {
+      await apiFetch<ResetResponse>("/api/reset", { method: "POST" });
+    } catch (err) {
+      return failureMessage(err);
+    }
+    await get().refresh();
+    return null;
   },
 }));
