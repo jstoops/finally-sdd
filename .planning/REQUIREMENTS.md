@@ -54,7 +54,7 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 - [x] **MD-05**: User sees a sparkline (inline SVG polyline, no library) beside each watchlist ticker, accumulated from SSE since page load, capped to a fixed recent window, and cleared on reset (G-02)
 - [x] **MD-06**: User sees a main price chart (Lightweight Charts) for the selected ticker, seeded from `GET /api/prices/{ticker}/history` and extended with SSE points; out-of-order points are dropped and the time axis shows local `HH:MM:SS` (G-04)
 - [x] **MD-07**: User can click a watchlist row to chart it; on load the first watchlist ticker is selected; removing the selected ticker selects the first remaining one (or an empty state); reset selects the first default ticker (G-05)
-- [ ] **MD-08** *(extra)*: User can click a positions-table row or a heatmap tile to chart that ticker
+- [x] **MD-08** *(extra)*: User can click a positions-table row or a heatmap tile to chart that ticker
 
 ### Portfolio
 
@@ -63,8 +63,8 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 - [ ] **PF-03**: `GET /api/portfolio/history` returns snapshots oldest first
 - [ ] **PF-04**: User sees the portfolio total value and cash balance in the header, updating live from SSE prices × positions computed client-side, with no polling of `/api/portfolio`
 - [ ] **PF-05** *(extra)*: User sees "P&L since start" (`total_value − 10,000`) in the header, colored green/red and updating live
-- [ ] **PF-06**: User sees a positions table (ticker, quantity, avg cost, current price, unrealized P&L, P&L %) that recomputes live from SSE, colors P&L green/red, and displays percents with 2dp without re-multiplying by 100
-- [ ] **PF-07**: User sees a portfolio heatmap (in-house squarified treemap, positioned divs) with tiles sized by live weight and colored by P&L % on a diverging green/red scale clamped at ±5%; tiny tiles hide their label behind a tooltip; with no positions it shows "No positions — buy something or ask FinAlly" (G-06)
+- [x] **PF-06**: User sees a positions table (ticker, quantity, avg cost, current price, unrealized P&L, P&L %) that recomputes live from SSE, colors P&L green/red, and displays percents with 2dp without re-multiplying by 100
+- [x] **PF-07**: User sees a portfolio heatmap (in-house squarified treemap, positioned divs) with tiles sized by live weight and colored by P&L % on a diverging green/red scale clamped at ±5%; tiny tiles hide their label behind a tooltip; with no positions it shows "No positions — buy something or ask FinAlly" (G-06)
 - [ ] **PF-08**: User sees a P&L line chart (Lightweight Charts) of total value over time from `/api/portfolio/history`; it renders a single point gracefully and refetches every 30 seconds as well as after trades, chat actions and reset (G-03)
 - [ ] **PF-09**: User can reset the account from the header after a `window.confirm`; `POST /api/reset` returns `{"status": "ok"}` after one transaction restores $10,000 cash and the default watchlist and deletes positions, trades, snapshots and chat messages, then re-syncs tracked tickers and records a fresh snapshot; reset shares the trade lock (G-16)
 - [ ] **PF-10**: After a reset the frontend re-fetches everything and clears the chat panel, sparklines and chart selection; the Reset button is disabled while a chat request is in flight (G-16)
@@ -184,14 +184,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MD-05 | Phase 1 | Complete |
 | MD-06 | Phase 1 | Complete |
 | MD-07 | Phase 1 | Complete |
-| MD-08 | Phase 2 | Pending |
+| MD-08 | Phase 2 | Complete |
 | PF-01 | Phase 2 | Pending |
 | PF-02 | Phase 2 | Pending |
 | PF-03 | Phase 2 | Pending |
 | PF-04 | Phase 2 | Pending |
 | PF-05 | Phase 2 | Pending |
-| PF-06 | Phase 2 | Pending |
-| PF-07 | Phase 2 | Pending |
+| PF-06 | Phase 2 | Complete |
+| PF-07 | Phase 2 | Complete |
 | PF-08 | Phase 2 | Pending |
 | PF-09 | Phase 2 | Pending |
 | PF-10 | Phase 3 | Pending |
