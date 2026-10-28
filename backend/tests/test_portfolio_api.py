@@ -2,6 +2,7 @@
 
 import re
 import sqlite3
+import uuid
 from contextlib import closing
 
 import pytest
@@ -25,7 +26,21 @@ NO_PRICE = "No price available for ZZZZ. Add it to your watchlist first."
 
 def run_sql(db_path: str, sql: str, params: tuple = ()) -> list[tuple]:
     with closing(sqlite3.connect(db_path)) as conn:
-        return conn.execute(sql, params).fetchall()
+        rows = conn.execute(sql, params).fetchall()
+        conn.commit()
+    return rows
+
+
+def insert_trade(db_path: str, executed_at: str, ticker: str = "AAPL") -> str:
+    """Insert one trade row directly; returns its id."""
+    trade_id = str(uuid.uuid4())
+    run_sql(
+        db_path,
+        "INSERT INTO trades (id, user_id, ticker, side, quantity, price, executed_at) "
+        "VALUES (?, 'default', ?, 'buy', 1.0, 100.0, ?)",
+        (trade_id, ticker, executed_at),
+    )
+    return trade_id
 
 
 @pytest.fixture
@@ -130,3 +145,46 @@ class TestTradeTracer:
         db_path = trade_client.app.state.db.path
         assert run_sql(db_path, "SELECT COUNT(*) FROM trades") == [(0,)]
         assert run_sql(db_path, "SELECT cash_balance FROM users_profile") == [(10000.0,)]
+
+
+class TestTrades:
+    def test_fresh_app_has_no_trades(self, trade_client):
+        res = trade_client.get("/api/trades")
+        assert res.status_code == 200
+        assert res.json() == {"trades": []}
+
+    def test_newest_first_with_trade_keys(self, trade_client):
+        buy = trade_client.post(
+            "/api/portfolio/trade", json={"ticker": "AAPL", "quantity": 10, "side": "buy"}
+        ).json()["trade"]
+        sell = trade_client.post(
+            "/api/portfolio/trade", json={"ticker": "AAPL", "quantity": 4, "side": "sell"}
+        ).json()["trade"]
+
+        trades = trade_client.get("/api/trades").json()["trades"]
+        assert [t["id"] for t in trades] == [sell["id"], buy["id"]]
+        assert trades[0] == sell
+        for trade in trades:
+            assert list(trade) == TRADE_KEYS
+            assert ISO_RE.match(trade["executed_at"])
+
+    def test_caps_at_100_and_drops_the_oldest(self, trade_client):
+        db_path = trade_client.app.state.db.path
+        ids = [
+            insert_trade(db_path, f"2026-10-09T14:{i // 60:02d}:{i % 60:02d}Z") for i in range(101)
+        ]
+
+        trades = trade_client.get("/api/trades").json()["trades"]
+        assert len(trades) == 100
+        assert ids[0] not in {t["id"] for t in trades}
+        assert trades[0]["id"] == ids[-1]
+        assert trades[-1]["id"] == ids[1]
+
+    def test_same_second_trades_keep_execution_order(self, trade_client):
+        db_path = trade_client.app.state.db.path
+        first = insert_trade(db_path, "2026-10-09T14:00:00Z")
+        second = insert_trade(db_path, "2026-10-09T14:00:00Z", ticker="MSFT")
+        third = insert_trade(db_path, "2026-10-09T14:00:00Z", ticker="NVDA")
+
+        trades = trade_client.get("/api/trades").json()["trades"]
+        assert [t["id"] for t in trades] == [third, second, first]
