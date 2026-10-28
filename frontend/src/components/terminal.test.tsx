@@ -452,6 +452,11 @@ describe("selection", () => {
     expect(within(screen.getByTestId("panel-chart")).getByText("TSLA")).toBeInTheDocument();
     expect(screen.getByTestId("position-row-TSLA")).toHaveAttribute("aria-selected", "true");
 
+    // The heatmap tile charts it too (the default ResizeObserver stub never fires: 16:9 box).
+    act(() => useWatchlist.getState().select("AAPL"));
+    fireEvent.click(screen.getByTestId("heatmap-tile-TSLA"));
+    expect(useWatchlist.getState().selected).toBe("TSLA");
+
     act(() => useWatchlist.getState().setEntries([...ENTRIES, entry("NFLX", 600, 600)]));
     expect(useWatchlist.getState().selected).toBe("TSLA");
     expect(within(screen.getByTestId("panel-chart")).getByText("TSLA")).toBeInTheDocument();
@@ -472,7 +477,12 @@ describe("Terminal", () => {
     ]) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
     }
-    expect(screen.getByTestId("panel-heatmap")).toHaveTextContent("Heatmap — coming in Phase 2");
+    expect(screen.getByTestId("panel-heatmap")).not.toHaveTextContent(
+      "Heatmap — coming in Phase 2",
+    );
+    expect(screen.getByTestId("heatmap-empty")).toHaveTextContent(
+      "No positions — buy something or ask FinAlly",
+    );
     expect(screen.getByTestId("panel-pnl")).toHaveTextContent("P&L — coming in Phase 2");
     expect(screen.getByTestId("panel-positions")).not.toHaveTextContent(
       "Positions — coming in Phase 2",
