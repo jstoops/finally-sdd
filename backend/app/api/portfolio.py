@@ -1,4 +1,4 @@
-"""Portfolio endpoints (PLAN §8): the current portfolio and market-order trades."""
+"""Portfolio endpoints (PLAN §8): the portfolio, market-order trades, history and trades."""
 
 from __future__ import annotations
 
@@ -34,6 +34,11 @@ def create_portfolio_router(trade_service: TradeService, portfolio: PortfolioSer
         """Fill a market order at the cached price; returns the trade and the new portfolio."""
         result = await trade_service.execute(body.ticker, body.quantity, body.side)
         return result.to_dict()
+
+    @router.get("/api/portfolio/history")
+    async def history() -> dict:
+        """Portfolio value snapshots for the P&L chart, oldest first (never pruned)."""
+        return {"snapshots": await portfolio.history()}
 
     @router.get("/api/trades")
     async def list_trades() -> dict:

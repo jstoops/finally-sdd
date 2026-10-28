@@ -10,6 +10,7 @@ import type { Position } from "@/api/types";
 import { ChartPanel } from "@/components/ChartPanel";
 import { Header } from "@/components/Header";
 import { Heatmap } from "@/components/Heatmap";
+import { PnlChart } from "@/components/PnlChart";
 import { PositionsTable } from "@/components/PositionsTable";
 import { TradePanel } from "@/components/TradeBar";
 import { Watchlist } from "@/components/Watchlist";
@@ -88,7 +89,7 @@ export function Terminal() {
           <ChartPanel />
           <div className="grid min-h-0 grid-cols-2 gap-1">
             <Heatmap />
-            <ComingSoon testId="panel-pnl" title="P&L" label="P&L — coming in Phase 2" />
+            <PnlChart />
           </div>
           <div className="grid min-h-0 grid-cols-2 gap-1">
             <PositionsTable />

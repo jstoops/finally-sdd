@@ -1,4 +1,4 @@
-"""Portfolio read view in the PLAN §8 shape and the trade list (history and reset arrive later)."""
+"""Portfolio read view in the PLAN §8 shape, the trade list and the snapshot history."""
 
 from __future__ import annotations
 
@@ -77,5 +77,22 @@ class PortfolioService:
                     "SELECT id, ticker, side, quantity, price, executed_at FROM trades "
                     "WHERE user_id = ? ORDER BY executed_at DESC, rowid DESC LIMIT ?",
                     (DEFAULT_USER_ID, limit),
+                )
+            ]
+
+    async def history(self) -> list[dict]:
+        """Every portfolio snapshot, oldest first (GET /api/portfolio/history)."""
+        return await asyncio.to_thread(self._load_history)
+
+    def _load_history(self) -> list[dict]:
+        """Blocking read. One SELECT is atomic, so a concurrent trade's snapshot is either
+        fully present or absent; rowid keeps snapshots in the same second in insertion order."""
+        with closing(self._db.connect()) as conn:
+            return [
+                {"total_value": row["total_value"], "recorded_at": row["recorded_at"]}
+                for row in conn.execute(
+                    "SELECT total_value, recorded_at FROM portfolio_snapshots "
+                    "WHERE user_id = ? ORDER BY recorded_at, rowid",
+                    (DEFAULT_USER_ID,),
                 )
             ]
