@@ -5,18 +5,24 @@ Fixtures only; tests never import this module directly.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.db import Database
 from app.main import create_app
 from app.market import MarketDataSource, PriceCache
 from app.market.simulator import SimulatorDataSource
+from app.portfolio import PortfolioService
+from app.tracker import TickerTracker
+from app.trading import TradeService
+from app.watchlist import WatchlistService
 
 
 class RecordingSource(MarketDataSource):
@@ -101,3 +107,44 @@ def client(make_app) -> Iterator[TestClient]:
 def recording_source() -> type[RecordingSource]:
     """The RecordingSource class: call it to build a fresh fake source."""
     return RecordingSource
+
+
+@dataclasses.dataclass
+class TradeEnv:
+    """Services wired as in `create_app`, on one database, cache, source and shared lock."""
+
+    db: Database
+    cache: PriceCache
+    source: RecordingSource
+    tracker: TickerTracker
+    lock: asyncio.Lock
+    portfolio: PortfolioService
+    trades: TradeService
+    watchlist: WatchlistService
+
+    def price(self, ticker: str, value: float) -> None:
+        """Set the cached price of `ticker` (the source never writes the cache)."""
+        self.cache.update(ticker, value)
+
+
+@pytest.fixture
+async def trade_env(tmp_path) -> AsyncIterator[TradeEnv]:
+    """A seeded database plus every trading service on one shared `asyncio.Lock`."""
+    db = Database(str(tmp_path / "trade.db"))
+    db.init()
+    cache = PriceCache()
+    source = RecordingSource()
+    await source.start(db.tracked_tickers())
+    tracker = TickerTracker(db, source)
+    lock = asyncio.Lock()
+    portfolio = PortfolioService(db, cache, tracker, lock)
+    yield TradeEnv(
+        db=db,
+        cache=cache,
+        source=source,
+        tracker=tracker,
+        lock=lock,
+        portfolio=portfolio,
+        trades=TradeService(db, cache, tracker, portfolio, lock),
+        watchlist=WatchlistService(db, cache, tracker, lock),
+    )
