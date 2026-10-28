@@ -441,10 +441,25 @@ describe("selection", () => {
     expect(useWatchlist.getState().selected).toBe("AAPL");
     expect(within(screen.getByTestId("panel-chart")).getByText("AAPL")).toBeInTheDocument();
   });
+  it("charts a held unwatched ticker from its positions row and keeps it across a watchlist add", async () => {
+    await renderTerminal(ENTRIES, {
+      "GET /api/portfolio": portfolioOf(5000, [position("TSLA", 2, 250)]),
+    });
+    expect(screen.queryByTestId("watchlist-row-TSLA")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("position-row-TSLA"));
+    expect(useWatchlist.getState().selected).toBe("TSLA");
+    expect(within(screen.getByTestId("panel-chart")).getByText("TSLA")).toBeInTheDocument();
+    expect(screen.getByTestId("position-row-TSLA")).toHaveAttribute("aria-selected", "true");
+
+    act(() => useWatchlist.getState().setEntries([...ENTRIES, entry("NFLX", 600, 600)]));
+    expect(useWatchlist.getState().selected).toBe("TSLA");
+    expect(within(screen.getByTestId("panel-chart")).getByText("TSLA")).toBeInTheDocument();
+  });
 });
 
 describe("Terminal", () => {
-  it("renders every D-01 panel with the coming-soon labels", async () => {
+  it("renders every D-01 panel, with coming-soon labels only where still unbuilt", async () => {
     await renderTerminal();
     for (const id of [
       "panel-watchlist",
@@ -459,9 +474,11 @@ describe("Terminal", () => {
     }
     expect(screen.getByTestId("panel-heatmap")).toHaveTextContent("Heatmap — coming in Phase 2");
     expect(screen.getByTestId("panel-pnl")).toHaveTextContent("P&L — coming in Phase 2");
-    expect(screen.getByTestId("panel-positions")).toHaveTextContent(
+    expect(screen.getByTestId("panel-positions")).not.toHaveTextContent(
       "Positions — coming in Phase 2",
     );
+    expect(screen.getByTestId("positions-table")).toBeInTheDocument();
+    expect(screen.getByTestId("positions-empty")).toHaveTextContent("No positions yet");
     expect(screen.getByTestId("panel-trade")).toBeInTheDocument();
     expect(screen.getByTestId("panel-chat")).toHaveTextContent("AI Chat — coming in Phase 3");
   });
