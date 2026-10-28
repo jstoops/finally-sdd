@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import uuid
 from dataclasses import dataclass
 
@@ -31,6 +32,7 @@ from .tracker import TickerTracker
 logger = logging.getLogger(__name__)
 
 DUST = 1e-6  # PLAN §7: sell tolerance and the remaining-quantity cutoff for deleting a row
+MIN_ORDER_VALUE = 0.01  # a buy must cost at least one cent; sells have no minimum
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,14 +88,16 @@ class TradeService:
     async def execute(self, raw_ticker: str, quantity: float, side: str) -> TradeResult:
         """Fill `quantity` shares of `raw_ticker` on `side` ("buy" or "sell").
 
-        Raises DomainError for a malformed ticker or side, no cached price,
+        Checks run in order: ticker, side, quantity, price, then cash or shares.
+        Raises DomainError for a malformed ticker or side, a non-finite, non-positive
+        or sub-0.0001 quantity, no cached price, a buy below MIN_ORDER_VALUE,
         insufficient cash or insufficient shares; nothing changes on failure.
         """
         ticker = normalize_ticker(raw_ticker)
         side = side.strip().lower() if isinstance(side, str) else ""
         if side not in ("buy", "sell"):
             raise DomainError("Side must be 'buy' or 'sell'.")
-        qty = round4(float(quantity))
+        qty = self._valid_quantity(quantity)
         async with self._lock:
             trade = await asyncio.to_thread(self._trade_tx, ticker, qty, side)
             # After the commit: a buy of an unwatched ticker starts tracking it, a sell of
@@ -104,6 +108,24 @@ class TradeService:
         return TradeResult(trade=trade, portfolio=portfolio)
 
     # --- Internals ---
+
+    @staticmethod
+    def _valid_quantity(quantity: float) -> float:
+        """Coerce and round `quantity` half-up to 4 dp, rejecting it before any SQL runs.
+
+        NaN, +/-Infinity (including 1e400, which parses as inf), zero and negatives
+        are rejected first; a positive value that rounds to 0 is rejected second.
+        """
+        try:
+            value = float(quantity)
+        except (TypeError, ValueError):
+            raise DomainError("Quantity must be a positive number.") from None
+        if not math.isfinite(value) or value <= 0:
+            raise DomainError("Quantity must be a positive number.")
+        qty = round4(value)
+        if qty <= 0:
+            raise DomainError("Quantity must be at least 0.0001.")
+        return qty
 
     def _trade_tx(self, ticker: str, qty: float, side: str) -> Trade:
         # Read under the lock: the fill price is never supplied by the client
@@ -123,6 +145,8 @@ class TradeService:
 
             if side == "buy":
                 cost = notional(qty, price)
+                if cost < MIN_ORDER_VALUE:
+                    raise DomainError("Order value must be at least $0.01.")
                 if cost > cash:
                     raise DomainError(
                         f"Insufficient cash (need {format_money(cost)}, have {format_money(cash)})."
