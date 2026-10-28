@@ -6,6 +6,7 @@
 //   md-xl: watchlist | center, with chat moved under the center column; the page scrolls
 import { useEffect } from "react";
 
+import type { Position } from "@/api/types";
 import { ChartPanel } from "@/components/ChartPanel";
 import { Header } from "@/components/Header";
 import { TradePanel } from "@/components/TradeBar";
@@ -56,9 +57,20 @@ export function Terminal() {
         void usePortfolio.getState().refresh();
       }
     });
+    // Tell the watchlist store which tickers are held, so a held but unwatched selection
+    // stays charted and falls back once the position closes (MD-08). The stores never import
+    // each other; this effect is the only bridge (assumption D-3).
+    const heldTickers = (positions: Position[]) => positions.map((p) => p.ticker);
+    useWatchlist.getState().setHeld(heldTickers(usePortfolio.getState().positions));
+    const unsubscribeHeld = usePortfolio.subscribe((state, prev) => {
+      if (state.positions !== prev.positions) {
+        useWatchlist.getState().setHeld(heldTickers(state.positions));
+      }
+    });
     const stopStream = startPriceStream();
     return () => {
       unsubscribe();
+      unsubscribeHeld();
       stopStream();
     };
   }, []);
