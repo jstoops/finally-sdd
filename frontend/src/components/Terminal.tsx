@@ -2,12 +2,13 @@
 
 // The full terminal grid (D-01). Later phases fill the dimmed slots instead of re-flowing.
 //
-//   xl+:   header across the top; watchlist | center (chart / heatmap+P&L / positions) | chat
+//   xl+:   header across the top; watchlist | center (chart / heatmap+P&L / positions+trade) | chat
 //   md-xl: watchlist | center, with chat moved under the center column; the page scrolls
 import { useEffect } from "react";
 
 import { ChartPanel } from "@/components/ChartPanel";
 import { Header } from "@/components/Header";
+import { TradePanel } from "@/components/TradeBar";
 import { Watchlist } from "@/components/Watchlist";
 import { startPriceStream, usePrices } from "@/store/prices";
 import { useWatchlist } from "@/store/watchlist";
@@ -64,17 +65,20 @@ export function Terminal() {
         <div className="flex min-h-0 flex-col md:row-span-2 xl:row-span-1">
           <Watchlist />
         </div>
-        <div className="grid min-h-0 gap-1 grid-rows-[minmax(16rem,55fr)_minmax(10rem,25fr)_minmax(8rem,20fr)] xl:grid-rows-[55fr_25fr_20fr]">
+        <div className="grid min-h-0 gap-1 grid-rows-[minmax(16rem,50fr)_minmax(10rem,25fr)_minmax(12rem,25fr)] xl:grid-rows-[50fr_25fr_25fr]">
           <ChartPanel />
           <div className="grid min-h-0 grid-cols-2 gap-1">
             <ComingSoon testId="panel-heatmap" title="Heatmap" label="Heatmap — coming in Phase 2" />
             <ComingSoon testId="panel-pnl" title="P&L" label="P&L — coming in Phase 2" />
           </div>
-          <ComingSoon
-            testId="panel-positions"
-            title="Positions & Trade"
-            label="Positions & Trade — coming in Phase 2"
-          />
+          <div className="grid min-h-0 grid-cols-2 gap-1">
+            <ComingSoon
+              testId="panel-positions"
+              title="Positions"
+              label="Positions — coming in Phase 2"
+            />
+            <TradePanel />
+          </div>
         </div>
         <ComingSoon
           testId="panel-chat"
