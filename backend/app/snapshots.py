@@ -1,18 +1,26 @@
 """Portfolio valuation and snapshots for the P&L chart (PLAN §7 portfolio_snapshots).
 
-A snapshot is recorded at startup, then every SNAPSHOT_INTERVAL seconds by a
-background task (and, from Phase 2, after each trade and after a reset).
+A snapshot is recorded at startup, every SNAPSHOT_INTERVAL seconds by a background
+task, after each trade and after a reset. Every snapshot values the portfolio with
+`value_portfolio`, the same function as GET /api/portfolio, so they never differ.
+
+Trades and reset call `insert_snapshot` on their own open transaction, while they
+already hold the shared state lock. `SnapshotRecorder` takes that lock itself and
+serves only the lifespan startup snapshot and the 30-second loop: `asyncio.Lock` is
+not reentrant, so calling the recorder from a lock holder would deadlock.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 import uuid
 from collections.abc import Callable, Iterable
 
 from .db import DEFAULT_USER_ID, Database, now_iso
 from .market import PriceCache
+from .valuation import value_portfolio
 
 logger = logging.getLogger(__name__)
 
@@ -24,21 +32,44 @@ def portfolio_value(
     positions: Iterable[tuple[str, float, float]],
     price_of: Callable[[str], float | None],
 ) -> float:
-    """Cash plus each `(ticker, quantity, avg_cost)` at its cached price, rounded to 2 dp.
+    """Cash plus each `(ticker, quantity, avg_cost)` at its cached price, in cents.
 
-    A ticker with no cached price is valued at its average cost (PLAN §8).
+    Delegates to `value_portfolio`, so an uncached ticker is valued at its served
+    avg_cost (PLAN §8) and money is rounded half-up exactly as the API serves it.
     """
-    total = cash
-    for ticker, quantity, avg_cost in positions:
-        price = price_of(ticker)
-        total += quantity * (price if price is not None else avg_cost)
-    return round(total, 2)
+    return value_portfolio(cash, positions, price_of)["total_value"]
+
+
+def insert_snapshot(conn: sqlite3.Connection, cache: PriceCache) -> float:
+    """Value the portfolio on `conn` and insert one portfolio_snapshots row.
+
+    Runs on the caller's open transaction and takes no lock, so a trade or reset
+    writes its snapshot atomically with its own changes. Returns the value stored.
+    """
+    (cash,) = conn.execute(
+        "SELECT cash_balance FROM users_profile WHERE id = ?", (DEFAULT_USER_ID,)
+    ).fetchone()
+    positions = [
+        (row["ticker"], row["quantity"], row["avg_cost"])
+        for row in conn.execute(
+            "SELECT ticker, quantity, avg_cost FROM positions WHERE user_id = ? ORDER BY rowid",
+            (DEFAULT_USER_ID,),
+        )
+    ]
+    value = portfolio_value(cash, positions, cache.get_price)
+    conn.execute(
+        "INSERT INTO portfolio_snapshots (id, user_id, total_value, recorded_at) "
+        "VALUES (?, ?, ?, ?)",
+        (str(uuid.uuid4()), DEFAULT_USER_ID, value, now_iso()),
+    )
+    return value
 
 
 class SnapshotRecorder:
-    """Values the portfolio and inserts one portfolio_snapshots row per call.
+    """Records one snapshot per call under the shared state lock.
 
-    Takes the shared state lock, so a snapshot never sees a half-applied mutation.
+    For lifespan startup and the 30-second loop only; lock holders (trades, reset)
+    call `insert_snapshot` inside their own transaction instead.
     """
 
     def __init__(self, db: Database, cache: PriceCache, lock: asyncio.Lock) -> None:
@@ -53,23 +84,7 @@ class SnapshotRecorder:
 
     def _record_tx(self) -> float:
         with self._db.transaction() as conn:
-            (cash,) = conn.execute(
-                "SELECT cash_balance FROM users_profile WHERE id = ?", (DEFAULT_USER_ID,)
-            ).fetchone()
-            positions = [
-                (row["ticker"], row["quantity"], row["avg_cost"])
-                for row in conn.execute(
-                    "SELECT ticker, quantity, avg_cost FROM positions WHERE user_id = ?",
-                    (DEFAULT_USER_ID,),
-                )
-            ]
-            value = portfolio_value(cash, positions, self._cache.get_price)
-            conn.execute(
-                "INSERT INTO portfolio_snapshots (id, user_id, total_value, recorded_at) "
-                "VALUES (?, ?, ?, ?)",
-                (str(uuid.uuid4()), DEFAULT_USER_ID, value, now_iso()),
-            )
-        return value
+            return insert_snapshot(conn, self._cache)
 
 
 async def run_snapshot_loop(

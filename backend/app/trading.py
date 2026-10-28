@@ -2,10 +2,13 @@
 
 `TradeService.execute` is the only code that changes cash, positions or trades. It takes
 the shared state lock, fills at the cached price inside one BEGIN IMMEDIATE transaction
-on a worker thread, and builds the response portfolio while still holding the lock, so
-the response matches the committed state. Rule failures raise DomainError (400).
+on a worker thread (cash, position, trades row and portfolio snapshot together),
+reconciles the tracked tickers after the commit, and builds the response portfolio
+while still holding the lock, so the response matches the committed state. Rule
+failures raise DomainError (400) and change nothing.
 
-Never call the lock-taking snapshot recorder from here: it takes the same `asyncio.Lock`,
+The snapshot is written with `insert_snapshot` on the trade's own connection. Never
+call the lock-taking snapshot recorder from here: it takes the same `asyncio.Lock`,
 which is not reentrant, so the trade would deadlock.
 """
 
@@ -13,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import uuid
 from dataclasses import dataclass
 
@@ -21,12 +25,14 @@ from .errors import DomainError
 from .market import PriceCache
 from .money import format_money, format_qty, notional, round4, to_cents
 from .portfolio import PortfolioService
+from .snapshots import insert_snapshot
 from .tickers import normalize_ticker
 from .tracker import TickerTracker
 
 logger = logging.getLogger(__name__)
 
 DUST = 1e-6  # PLAN §7: sell tolerance and the remaining-quantity cutoff for deleting a row
+MIN_ORDER_VALUE = 0.01  # a buy must cost at least one cent; sells have no minimum
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,28 +81,51 @@ class TradeService:
     ) -> None:
         self._db = db
         self._cache = cache
-        self._tracker = tracker  # plan 02-02 reconciles tracked tickers after each fill
+        self._tracker = tracker
         self._portfolio = portfolio
         self._lock = lock
 
     async def execute(self, raw_ticker: str, quantity: float, side: str) -> TradeResult:
         """Fill `quantity` shares of `raw_ticker` on `side` ("buy" or "sell").
 
-        Raises DomainError for a malformed ticker or side, no cached price,
+        Checks run in order: ticker, side, quantity, price, then cash or shares.
+        Raises DomainError for a malformed ticker or side, a non-finite, non-positive
+        or sub-0.0001 quantity, no cached price, a buy below MIN_ORDER_VALUE,
         insufficient cash or insufficient shares; nothing changes on failure.
         """
         ticker = normalize_ticker(raw_ticker)
         side = side.strip().lower() if isinstance(side, str) else ""
         if side not in ("buy", "sell"):
             raise DomainError("Side must be 'buy' or 'sell'.")
-        qty = round4(float(quantity))
+        qty = self._valid_quantity(quantity)
         async with self._lock:
             trade = await asyncio.to_thread(self._trade_tx, ticker, qty, side)
+            # After the commit: a buy of an unwatched ticker starts tracking it, a sell of
+            # an unwatched ticker to zero stops it. A failure is logged; the fill stands.
+            await self._tracker.reconcile_quietly(f"{side} {ticker}")
             portfolio = await asyncio.to_thread(self._portfolio.view_sync)
         logger.info("Trade: %s %s %s @ %s", trade.side, trade.quantity, trade.ticker, trade.price)
         return TradeResult(trade=trade, portfolio=portfolio)
 
     # --- Internals ---
+
+    @staticmethod
+    def _valid_quantity(quantity: float) -> float:
+        """Coerce and round `quantity` half-up to 4 dp, rejecting it before any SQL runs.
+
+        NaN, +/-Infinity (including 1e400, which parses as inf), zero and negatives
+        are rejected first; a positive value that rounds to 0 is rejected second.
+        """
+        try:
+            value = float(quantity)
+        except (TypeError, ValueError):
+            raise DomainError("Quantity must be a positive number.") from None
+        if not math.isfinite(value) or value <= 0:
+            raise DomainError("Quantity must be a positive number.")
+        qty = round4(value)
+        if qty <= 0:
+            raise DomainError("Quantity must be at least 0.0001.")
+        return qty
 
     def _trade_tx(self, ticker: str, qty: float, side: str) -> Trade:
         # Read under the lock: the fill price is never supplied by the client
@@ -116,6 +145,8 @@ class TradeService:
 
             if side == "buy":
                 cost = notional(qty, price)
+                if cost < MIN_ORDER_VALUE:
+                    raise DomainError("Order value must be at least $0.01.")
                 if cost > cash:
                     raise DomainError(
                         f"Insufficient cash (need {format_money(cost)}, have {format_money(cash)})."
@@ -180,4 +211,6 @@ class TradeService:
                     trade.executed_at,
                 ),
             )
+            # PF-02: the snapshot commits (or rolls back) with the trade itself
+            insert_snapshot(conn, self._cache)
         return trade
