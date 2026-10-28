@@ -66,7 +66,19 @@ Plans:
   4. The P&L chart plots total portfolio value from snapshots recorded at startup, every 30 seconds and after each trade; it renders sensibly with a single point and refreshes every 30 seconds and after each trade.
   5. A held ticker removed from the watchlist keeps streaming and keeps its live P&L, and selling an unwatched ticker to zero stops pricing it; after confirming Reset in the header, the user sees $10,000 cash, no positions or trades, a fresh P&L starting point, and the default watchlist.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+- [ ] 02-01-PLAN.md — Tracer: trade bar → TradeService (lock, one transaction with snapshot, reconcile) → header cash; then every trade rule, cent rounding and the parallel-buy proof
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 02-02-PLAN.md — Live header total/P&L, positions table, squarified heatmap, click-to-chart with held-aware selection
+- [ ] 02-03-PLAN.md — Trade bar feedback (client checks, inline errors, auto-clearing fill message) and the trade history (GET /api/trades)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 02-04-PLAN.md — P&L BaselineSeries chart from snapshot history, and confirmed one-transaction Reset with tracked-ticker re-sync
+
 **UI hint**: yes
 
 ### Phase 3: AI Copilot and Complete Terminal
@@ -112,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Live Market Terminal | 7/7 | Complete    | 2026-10-27 |
-| 2. Trading and Live Portfolio | 0/TBD | Not started | - |
+| 2. Trading and Live Portfolio | 0/4 | Planned | - |
 | 3. AI Copilot and Complete Terminal | 0/TBD | Not started | - |
 
 ## Backlog
