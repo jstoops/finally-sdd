@@ -1,4 +1,4 @@
-"""Portfolio read view in the PLAN §8 shape (trade list, history and reset arrive later)."""
+"""Portfolio read view in the PLAN §8 shape and the trade list (history and reset arrive later)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from .db import DEFAULT_USER_ID, Database
 from .market import PriceCache
 from .tracker import TickerTracker
 from .valuation import value_portfolio
+
+TRADES_LIMIT = 100  # GET /api/trades returns at most this many rows, newest first
 
 
 class PortfolioService:
@@ -54,3 +56,26 @@ class PortfolioService:
             finally:
                 conn.execute("COMMIT")
         return value_portfolio(cash, rows, self._cache.get_price)
+
+    async def list_trades(self, limit: int = TRADES_LIMIT) -> list[dict]:
+        """The most recent trades, newest first (GET /api/trades)."""
+        return await asyncio.to_thread(self._load_trades, limit)
+
+    def _load_trades(self, limit: int) -> list[dict]:
+        """Blocking read. rowid breaks ties so trades in the same second keep execution order."""
+        with closing(self._db.connect()) as conn:
+            return [
+                {
+                    "id": row["id"],
+                    "ticker": row["ticker"],
+                    "side": row["side"],
+                    "quantity": row["quantity"],
+                    "price": row["price"],
+                    "executed_at": row["executed_at"],
+                }
+                for row in conn.execute(
+                    "SELECT id, ticker, side, quantity, price, executed_at FROM trades "
+                    "WHERE user_id = ? ORDER BY executed_at DESC, rowid DESC LIMIT ?",
+                    (DEFAULT_USER_ID, limit),
+                )
+            ]

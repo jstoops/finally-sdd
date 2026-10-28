@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import type { UTCTimestamp } from "lightweight-charts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Portfolio, Trade, TradeResponse, TradesResponse } from "@/api/types";
@@ -155,8 +156,8 @@ describe("TradeHistory", () => {
     expect(second).toHaveTextContent("4");
     expect(third).toHaveTextContent("AAPL");
     expect(third).toHaveTextContent("$190.52");
-    expect(third).toHaveTextContent(formatLocalTime(Date.parse(T1.executed_at) / 1000));
-    expect(formatLocalTime(Date.parse(T1.executed_at) / 1000)).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    expect(third).toHaveTextContent(formatLocalTime((Date.parse(T1.executed_at) / 1000) as UTCTimestamp));
+    expect(formatLocalTime((Date.parse(T1.executed_at) / 1000) as UTCTimestamp)).toMatch(/^\d{2}:\d{2}:\d{2}$/);
   });
 });
 

@@ -2,11 +2,12 @@
 
 // Trade bar (TRD-07): ticker and quantity, then Buy or Sell. Market orders fill instantly at
 // the server's cached price, with no confirmation dialog. One inline slot shows the recorded
-// fill or the error. Plan 02-05 adds the trade history under the bar in TradePanel.
+// fill or the error. TradePanel shows the trade history (TRD-10) under the bar.
 import { useEffect, useRef, useState } from "react";
 
 import { sanitizeTickerInput, tickerError } from "@/api/ticker";
 import type { Side } from "@/api/types";
+import { TradeHistory } from "@/components/TradeHistory";
 import { formatPrice } from "@/domain/market";
 import { formatQty } from "@/domain/portfolio";
 import { usePortfolio } from "@/store/portfolio";
@@ -173,6 +174,10 @@ export function TradePanel() {
         Trade
       </h2>
       <TradeBar />
+      <h3 className="border-y border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+        Trades
+      </h3>
+      <TradeHistory />
     </section>
   );
 }

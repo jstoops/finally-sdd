@@ -35,4 +35,9 @@ def create_portfolio_router(trade_service: TradeService, portfolio: PortfolioSer
         result = await trade_service.execute(body.ticker, body.quantity, body.side)
         return result.to_dict()
 
+    @router.get("/api/trades")
+    async def list_trades() -> dict:
+        """The most recent trades (at most TRADES_LIMIT), newest first."""
+        return {"trades": await portfolio.list_trades()}
+
     return router
