@@ -3,6 +3,8 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  Portfolio,
+  Position,
   PriceFrame,
   PriceTick,
   StreamStatus,
@@ -10,12 +12,13 @@ import type {
   WatchlistEntry,
 } from "@/api/types";
 import Home from "@/app/page";
-import { ConnectionDot, Header } from "@/components/Header";
+import { ConnectionDot } from "@/components/Header";
 import { Terminal } from "@/components/Terminal";
 import { usePortfolio } from "@/store/portfolio";
 import { SPARK_MAX, usePrices } from "@/store/prices";
 import { useWatchlist } from "@/store/watchlist";
 import { FakeEventSource } from "@/test/FakeEventSource";
+import { callsTo, jsonResponse, type Routes, stubApi } from "@/test/stubFetch";
 
 // jsdom has no canvas; the chart panel's behavior is covered in ChartPanel.test.tsx.
 vi.mock("lightweight-charts", async (importOriginal) => {
@@ -35,19 +38,6 @@ vi.mock("lightweight-charts", async (importOriginal) => {
     createChart: vi.fn(() => chart),
   };
 });
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-function stubFetch(body: unknown, status = 200) {
-  const fetchMock = vi.fn(async () => jsonResponse(body, status));
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
 
 function entry(ticker: string, price: number | null, open: number | null): WatchlistEntry {
   return { ticker, price, open_price: open, added_at: "2026-10-09T14:00:00Z" };
@@ -87,16 +77,70 @@ function emit(frame: PriceFrame) {
   act(() => FakeEventSource.latest().emitMessage(frame));
 }
 
-async function renderTerminal(entries: WatchlistEntry[] = ENTRIES) {
-  stubFetch({ tickers: entries });
+function position(ticker: string, quantity: number, avgCost: number, price = avgCost): Position {
+  return {
+    ticker,
+    quantity,
+    avg_cost: avgCost,
+    current_price: price,
+    market_value: quantity * price,
+    unrealized_pnl: (price - avgCost) * quantity,
+    unrealized_pnl_percent: 0,
+    weight: 1,
+  };
+}
+
+function portfolioOf(cash: number, positions: Position[] = []): Portfolio {
+  const positionsValue = positions.reduce((sum, p) => sum + p.market_value, 0);
+  return {
+    cash_balance: cash,
+    positions_value: positionsValue,
+    total_value: cash + positionsValue,
+    unrealized_pnl: 0,
+    positions,
+  };
+}
+
+function tradeResponseOf(portfolio: Portfolio, side: "buy" | "sell" = "buy"): TradeResponse {
+  return {
+    trade: {
+      id: "t-1",
+      ticker: "AAPL",
+      side,
+      quantity: 10,
+      price: 190.52,
+      executed_at: "2026-10-09T14:03:22Z",
+    },
+    portfolio,
+  };
+}
+
+function networkDown(): never {
+  throw new TypeError("Failed to fetch");
+}
+
+/** stubApi with the given watchlist body plus any extra routes. */
+function stubTerminalApi(entries: WatchlistEntry[] = ENTRIES, routes: Routes = {}) {
+  return stubApi({ "GET /api/watchlist": { tickers: entries }, ...routes });
+}
+
+async function renderTerminal(entries: WatchlistEntry[] = ENTRIES, routes: Routes = {}) {
+  const fetchMock = stubTerminalApi(entries, routes);
   render(<Terminal />);
   await act(async () => {});
+  return fetchMock;
 }
 
 beforeEach(() => {
   usePrices.setState({ ticks: {}, lastTs: {}, spark: {}, status: "connecting" });
-  useWatchlist.setState({ entries: [], loaded: false, loadError: null, selected: null });
-  usePortfolio.setState({ cash: null, positions: [] });
+  useWatchlist.setState({
+    entries: [],
+    loaded: false,
+    loadError: null,
+    selected: null,
+    held: [],
+  });
+  usePortfolio.setState({ cash: null, positions: [], loaded: false, loadError: null });
 });
 
 afterEach(() => {
@@ -131,19 +175,9 @@ describe("ConnectionDot", () => {
   });
 });
 
-describe("Header", () => {
-  it("shows only the wordmark and the connection dot", () => {
-    render(<Header />);
-    const header = screen.getByRole("banner");
-    expect(header).toHaveTextContent(/^FinAlly$/);
-    expect(header.querySelectorAll("button")).toHaveLength(0);
-    expect(screen.getByTestId("connection-dot")).toBeInTheDocument();
-  });
-});
-
 describe("page", () => {
   it("leaves exactly one open EventSource under StrictMode", async () => {
-    stubFetch({ tickers: [] });
+    stubApi();
     render(
       <StrictMode>
         <Home />
@@ -156,7 +190,7 @@ describe("page", () => {
   });
 
   it("renders the terminal", async () => {
-    stubFetch({ tickers: ENTRIES });
+    stubTerminalApi();
     render(<Home />);
     await act(async () => {});
     expect(screen.getByTestId("panel-watchlist")).toBeInTheDocument();
@@ -200,6 +234,67 @@ describe("prices store ingestFrame", () => {
     emit(frameOf(tick("AAPL", 190, 1), tick("TSLA", 250, 1)));
     expect(usePrices.getState().ticks.TSLA?.price).toBe(250);
     expect(screen.queryByTestId("watchlist-row-TSLA")).toBeNull();
+  });
+});
+
+describe("portfolio store", () => {
+  it("loads a portfolio and marks it loaded", async () => {
+    stubApi({ "GET /api/portfolio": portfolioOf(8094.8, [position("AAPL", 10, 190.52)]) });
+    await usePortfolio.getState().loadPortfolio();
+    const state = usePortfolio.getState();
+    expect(state.cash).toBe(8094.8);
+    expect(state.positions.map((p) => p.ticker)).toEqual(["AAPL"]);
+    expect(state.loaded).toBe(true);
+    expect(state.loadError).toBeNull();
+  });
+
+  it("rejects a body that is not a portfolio", async () => {
+    stubApi({ "GET /api/portfolio": { tickers: [] } });
+    await usePortfolio.getState().loadPortfolio();
+    expect(usePortfolio.getState().cash).toBeNull();
+    expect(usePortfolio.getState().loadError).toBe("Could not load the portfolio.");
+  });
+
+  it("sets the load error when the server cannot be reached", async () => {
+    stubApi({ "GET /api/portfolio": networkDown });
+    await usePortfolio.getState().loadPortfolio();
+    expect(usePortfolio.getState().cash).toBeNull();
+    expect(usePortfolio.getState().loadError).toBe("Could not load the portfolio.");
+  });
+
+  it("refresh() awaits the portfolio load", async () => {
+    stubApi({ "GET /api/portfolio": portfolioOf(1234.5) });
+    await usePortfolio.getState().refresh();
+    expect(usePortfolio.getState().cash).toBe(1234.5);
+  });
+
+  it("discards a load requested before a trade response that resolves after it", async () => {
+    let release: (body: Portfolio) => void = () => {};
+    stubApi({
+      "GET /api/portfolio": () =>
+        new Promise<Portfolio>((resolve) => {
+          release = resolve;
+        }),
+      "POST /api/portfolio/trade": tradeResponseOf(portfolioOf(8094.8)),
+    });
+    const load = usePortfolio.getState().loadPortfolio();
+    await usePortfolio.getState().trade("AAPL", 10, "buy");
+    expect(usePortfolio.getState().cash).toBe(8094.8);
+
+    release(portfolioOf(10000));
+    await load;
+    expect(usePortfolio.getState().cash).toBe(8094.8);
+  });
+
+  it("applies a load requested after the trade response", async () => {
+    stubApi({
+      "GET /api/portfolio": portfolioOf(9000),
+      "POST /api/portfolio/trade": tradeResponseOf(portfolioOf(8094.8)),
+    });
+    await usePortfolio.getState().trade("AAPL", 10, "buy");
+    expect(usePortfolio.getState().cash).toBe(8094.8);
+    await usePortfolio.getState().loadPortfolio();
+    expect(usePortfolio.getState().cash).toBe(9000);
   });
 });
 
@@ -312,6 +407,40 @@ describe("selection", () => {
     setEntries([]);
     expect(useWatchlist.getState().selected).toBeNull();
   });
+
+  it("keeps a held but unwatched selection across watchlist changes until it is no longer held", () => {
+    const { setEntries, setHeld, select } = useWatchlist.getState();
+    setEntries(ENTRIES);
+    setHeld(["TSLA"]);
+    select("TSLA");
+    setEntries([ENTRIES[0], ENTRIES[1]]);
+    expect(useWatchlist.getState().selected).toBe("TSLA");
+    useWatchlist.getState().setHeld([]);
+    expect(useWatchlist.getState().selected).toBe("AAPL");
+  });
+
+  it("charts a held unwatched ticker and falls back when the position is sold to zero", async () => {
+    await renderTerminal(ENTRIES, {
+      "GET /api/portfolio": portfolioOf(5000, [position("TSLA", 2, 250)]),
+      "POST /api/portfolio/trade": tradeResponseOf(portfolioOf(5500), "sell"),
+    });
+    expect(useWatchlist.getState().held).toEqual(["TSLA"]);
+
+    act(() => useWatchlist.getState().select("TSLA"));
+    expect(within(screen.getByTestId("panel-chart")).getByText("TSLA")).toBeInTheDocument();
+
+    // A watchlist add keeps the held selection.
+    act(() => useWatchlist.getState().setEntries([...ENTRIES, entry("NFLX", 600, 600)]));
+    expect(useWatchlist.getState().selected).toBe("TSLA");
+
+    // Selling TSLA to zero drops it from the held set: the selection falls back.
+    await act(async () => {
+      await usePortfolio.getState().trade("TSLA", 2, "sell");
+    });
+    expect(useWatchlist.getState().held).toEqual([]);
+    expect(useWatchlist.getState().selected).toBe("AAPL");
+    expect(within(screen.getByTestId("panel-chart")).getByText("AAPL")).toBeInTheDocument();
+  });
 });
 
 describe("Terminal", () => {
@@ -335,21 +464,16 @@ describe("Terminal", () => {
     );
     expect(screen.getByTestId("panel-trade")).toBeInTheDocument();
     expect(screen.getByTestId("panel-chat")).toHaveTextContent("AI Chat — coming in Phase 3");
-    expect(screen.getByRole("banner")).toHaveTextContent(/^FinAlly$/);
-    expect(screen.getByRole("banner").querySelectorAll("button")).toHaveLength(0);
   });
 
-  it("opens one stream and loads the watchlist once", async () => {
-    const fetchMock = stubFetch({ tickers: ENTRIES });
-    render(<Terminal />);
-    await act(async () => {});
+  it("opens one stream and loads the watchlist and the portfolio once", async () => {
+    const fetchMock = await renderTerminal();
     expect(FakeEventSource.open()).toHaveLength(1);
-    // The chart panel also requests the selected ticker's history; count watchlist loads only.
-    const watchlistCalls = fetchMock.mock.calls.filter(
-      (call) => String((call as unknown[])[0]) === "/api/watchlist",
-    );
-    expect(watchlistCalls).toHaveLength(1);
+    // The chart panel also requests the selected ticker's history; count by URL.
+    expect(callsTo(fetchMock, "/api/watchlist")).toHaveLength(1);
+    expect(callsTo(fetchMock, "/api/portfolio")).toHaveLength(1);
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.getByTestId("header-cash")).toHaveTextContent("$10,000.00");
   });
 
   it("shows the empty states for an empty watchlist", async () => {
@@ -359,14 +483,10 @@ describe("Terminal", () => {
   });
 
   it("shows the generic network message when the first load cannot reach the server", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new TypeError("Failed to fetch");
-      }),
-    );
-    render(<Terminal />);
-    await act(async () => {});
+    await renderTerminal(ENTRIES, {
+      "GET /api/watchlist": networkDown,
+      "GET /api/portfolio": networkDown,
+    });
     expect(screen.getByText("Could not reach the server. Try again.")).toHaveClass("text-down");
     expect(screen.queryByText("Failed to fetch")).toBeNull();
   });
@@ -374,46 +494,58 @@ describe("Terminal", () => {
   it("re-fetches a failed first load once the stream opens", async () => {
     // WR-04: the backend was down at mount; the stream opening means it is back.
     let up = false;
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (!up) throw new TypeError("Failed to fetch");
-      if (String(input) === "/api/watchlist") return jsonResponse({ tickers: ENTRIES });
-      return jsonResponse({ ticker: "AAPL", points: [] });
+    await renderTerminal(ENTRIES, {
+      "GET /api/watchlist": () => (up ? { tickers: ENTRIES } : networkDown()),
+      "GET /api/portfolio": () => (up ? portfolioOf(10000) : networkDown()),
     });
-    vi.stubGlobal("fetch", fetchMock);
-    render(<Terminal />);
-    await act(async () => {});
     expect(screen.getByText("Could not reach the server. Try again.")).toBeInTheDocument();
+    expect(screen.getByTestId("header-cash")).toHaveTextContent("—");
 
     up = true;
     await act(async () => FakeEventSource.latest().emitOpen());
     expect(screen.queryByText("Could not reach the server. Try again.")).toBeNull();
     expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.getByTestId("header-cash")).toHaveTextContent("$10,000.00");
   });
 
-  it("re-fetches the watchlist when the stream reconnects, not on the first open", async () => {
-    const fetchMock = stubFetch({ tickers: ENTRIES });
-    render(<Terminal />);
-    await act(async () => {});
-    const watchlistLoads = () =>
-      fetchMock.mock.calls.filter((call) => String((call as unknown[])[0]) === "/api/watchlist")
-        .length;
+  it("re-fetches only the failed portfolio on the first open", async () => {
+    let up = false;
+    const fetchMock = await renderTerminal(ENTRIES, {
+      "GET /api/portfolio": () => (up ? portfolioOf(10000) : networkDown()),
+    });
+    expect(usePortfolio.getState().loadError).toBe("Could not load the portfolio.");
+
+    up = true;
+    await act(async () => FakeEventSource.latest().emitOpen());
+    expect(callsTo(fetchMock, "/api/portfolio")).toHaveLength(2);
+    expect(callsTo(fetchMock, "/api/watchlist")).toHaveLength(1);
+    expect(usePortfolio.getState().cash).toBe(10000);
+  });
+
+  it("re-fetches the watchlist and the portfolio on reconnect, not on the first open", async () => {
+    const fetchMock = await renderTerminal();
+    const watchlistLoads = () => callsTo(fetchMock, "/api/watchlist").length;
+    const portfolioLoads = () => callsTo(fetchMock, "/api/portfolio").length;
 
     const es = FakeEventSource.latest();
     await act(async () => es.emitOpen());
     expect(watchlistLoads()).toBe(1);
+    expect(portfolioLoads()).toBe(1);
 
     await act(async () => es.emitError(FakeEventSource.CONNECTING));
     await act(async () => es.emitOpen());
     expect(watchlistLoads()).toBe(2);
+    expect(portfolioLoads()).toBe(2);
 
     // Frames while open are not reconnects.
     emit(frameOf(tick("AAPL", 191, 1)));
     await act(async () => {});
     expect(watchlistLoads()).toBe(2);
+    expect(portfolioLoads()).toBe(2);
   });
 
   it("stops listening for reconnects after unmount", async () => {
-    const fetchMock = stubFetch({ tickers: ENTRIES });
+    const fetchMock = stubTerminalApi();
     const { unmount } = render(<Terminal />);
     await act(async () => {});
     unmount();
@@ -426,9 +558,9 @@ describe("Terminal", () => {
   });
 
   it("shows a load error inline", async () => {
-    stubFetch({ error: "Backend unavailable" }, 500);
-    render(<Terminal />);
-    await act(async () => {});
+    await renderTerminal(ENTRIES, {
+      "GET /api/watchlist": () => jsonResponse({ error: "Backend unavailable" }, 500),
+    });
     const error = screen.getByText("Backend unavailable");
     expect(error).toHaveClass("text-down");
   });
@@ -462,18 +594,11 @@ describe("Terminal", () => {
         ],
       },
     };
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url === "/api/watchlist") return jsonResponse({ tickers: ENTRIES });
-      if (url === "/api/portfolio/trade" && init?.method === "POST") {
-        return jsonResponse(tradeResponse);
-      }
-      return jsonResponse({ ticker: "AAPL", points: [] });
+    const fetchMock = await renderTerminal(ENTRIES, {
+      "POST /api/portfolio/trade": tradeResponse,
     });
-    vi.stubGlobal("fetch", fetchMock);
     const confirmSpy = vi.spyOn(window, "confirm");
-    render(<Terminal />);
-    await act(async () => {});
+    expect(screen.getByTestId("header-cash")).toHaveTextContent("$10,000.00");
 
     fireEvent.change(screen.getByTestId("trade-ticker"), { target: { value: "aapl" } });
     fireEvent.change(screen.getByTestId("trade-qty"), { target: { value: "10" } });
@@ -481,38 +606,32 @@ describe("Terminal", () => {
       fireEvent.click(screen.getByTestId("trade-buy"));
     });
 
-    const tradeCalls = fetchMock.mock.calls.filter(
-      ([input]) => String(input) === "/api/portfolio/trade",
-    );
+    const tradeCalls = callsTo(fetchMock, "/api/portfolio/trade", "POST");
     expect(tradeCalls).toHaveLength(1);
     const [, init] = tradeCalls[0];
-    expect(init?.method).toBe("POST");
-    expect(JSON.parse(String(init?.body))).toEqual({ ticker: "AAPL", quantity: 10, side: "buy" });
+    expect((init as RequestInit | undefined)?.method).toBe("POST");
+    expect(JSON.parse(String((init as RequestInit | undefined)?.body))).toEqual({
+      ticker: "AAPL",
+      quantity: 10,
+      side: "buy",
+    });
 
     const message = screen.getByTestId("trade-message");
     expect(message).toHaveTextContent("Bought 10 AAPL @ $190.52");
     expect(message).toHaveAttribute("data-kind", "success");
     expect(usePortfolio.getState().cash).toBe(8094.8);
     expect(usePortfolio.getState().positions.map((p) => p.ticker)).toEqual(["AAPL"]);
+    // Cash moves by exactly the trade cost: 10 x 190.52 = 1,905.20.
+    expect(screen.getByTestId("header-cash")).toHaveTextContent("$8,094.80");
     expect(confirmSpy).not.toHaveBeenCalled();
     confirmSpy.mockRestore();
   });
 
   it("shows a trade error inline", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/api/watchlist") return jsonResponse({ tickers: ENTRIES });
-      if (url === "/api/portfolio/trade") {
-        return jsonResponse(
-          { error: "No price available for ZZZZ. Add it to your watchlist first." },
-          400,
-        );
-      }
-      return jsonResponse({ ticker: "AAPL", points: [] });
+    await renderTerminal(ENTRIES, {
+      "POST /api/portfolio/trade": () =>
+        jsonResponse({ error: "No price available for ZZZZ. Add it to your watchlist first." }, 400),
     });
-    vi.stubGlobal("fetch", fetchMock);
-    render(<Terminal />);
-    await act(async () => {});
 
     fireEvent.change(screen.getByTestId("trade-ticker"), { target: { value: "zzzz" } });
     fireEvent.change(screen.getByTestId("trade-qty"), { target: { value: "1" } });
@@ -527,6 +646,7 @@ describe("Terminal", () => {
     expect(message).toHaveAttribute("data-kind", "error");
     expect(message).toHaveAttribute("role", "alert");
     expect(message).toHaveClass("text-down");
-    expect(usePortfolio.getState().cash).toBeNull();
+    // The rejected trade leaves the loaded portfolio untouched.
+    expect(usePortfolio.getState().cash).toBe(10000);
   });
 });

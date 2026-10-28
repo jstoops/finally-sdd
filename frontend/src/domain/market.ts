@@ -66,8 +66,18 @@ export function sparkPoints(values: readonly number[], width: number, height: nu
     .join(" ");
 }
 
-/** Keep the selection while it is listed; otherwise the first ticker, or null when empty. */
-export function nextSelection(tickers: readonly string[], selected: string | null): string | null {
-  if (selected !== null && tickers.includes(selected)) return selected;
-  return tickers[0] ?? null;
+/**
+ * Keep the selection while it is watched or held (a held but unwatched ticker can stay
+ * charted); otherwise fall back to the first watchlist ticker, or null when the watchlist is
+ * empty. The fallback is never a held-only ticker (RESEARCH Pitfall 5).
+ */
+export function nextSelection(
+  watchlist: readonly string[],
+  selected: string | null,
+  held: readonly string[] = [],
+): string | null {
+  if (selected !== null && (watchlist.includes(selected) || held.includes(selected))) {
+    return selected;
+  }
+  return watchlist[0] ?? null;
 }
