@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import type { Position } from "@/api/types";
 import { ChartPanel } from "@/components/ChartPanel";
 import { Header } from "@/components/Header";
+import { Heatmap } from "@/components/Heatmap";
 import { PositionsTable } from "@/components/PositionsTable";
 import { TradePanel } from "@/components/TradeBar";
 import { Watchlist } from "@/components/Watchlist";
@@ -86,7 +87,7 @@ export function Terminal() {
         <div className="grid min-h-0 gap-1 grid-rows-[minmax(16rem,50fr)_minmax(10rem,25fr)_minmax(12rem,25fr)] xl:grid-rows-[50fr_25fr_25fr]">
           <ChartPanel />
           <div className="grid min-h-0 grid-cols-2 gap-1">
-            <ComingSoon testId="panel-heatmap" title="Heatmap" label="Heatmap — coming in Phase 2" />
+            <Heatmap />
             <ComingSoon testId="panel-pnl" title="P&L" label="P&L — coming in Phase 2" />
           </div>
           <div className="grid min-h-0 grid-cols-2 gap-1">

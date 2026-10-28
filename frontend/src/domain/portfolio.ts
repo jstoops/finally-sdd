@@ -110,3 +110,23 @@ export function formatSignedMoney(n: number | null | undefined): string {
   const cents = toCents(n);
   return `${cents < 0 ? "-" : "+"}$${formatPrice(Math.abs(cents))}`;
 }
+
+/** P&L % at which a heatmap tile reaches full color (PF-07). */
+const PNL_COLOR_CLAMP = 5;
+// RGB of the border token (#30363d), --color-up (#22c55e) and --color-down (#ef4444).
+const NEUTRAL_RGB = [48, 54, 61] as const;
+const UP_RGB = [34, 197, 94] as const;
+const DOWN_RGB = [239, 68, 68] as const;
+
+/**
+ * Diverging heatmap tile color for a P&L percent (percent units): the neutral border color
+ * at 0%, mixed toward green above and red below, fully saturated at +/-5% and clamped beyond.
+ * A non-finite percent is neutral.
+ */
+export function pnlColor(pct: number): string {
+  if (!Number.isFinite(pct) || pct === 0) return `rgb(${NEUTRAL_RGB.join(", ")})`;
+  const t = Math.min(Math.abs(pct) / PNL_COLOR_CLAMP, 1);
+  const target = pct > 0 ? UP_RGB : DOWN_RGB;
+  const mixed = NEUTRAL_RGB.map((c, i) => Math.round(c + (target[i] - c) * t));
+  return `rgb(${mixed.join(", ")})`;
+}
