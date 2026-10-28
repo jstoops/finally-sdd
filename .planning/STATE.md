@@ -68,6 +68,7 @@ Recent decisions affecting current work:
 - [Phase 1]: Phase 2 trade and reset services must take the shared `app.state` `state_lock` used by watchlist and snapshots
 - [Phase 1]: `TickerTracker.reconcile` is the only app caller of `source.add_ticker`/`remove_ticker`; trades and reset must go through it
 - [Phase 1]: Business failures raise `DomainError` (400) / `NotFoundError` (404) and render as `{"error": ...}`
+- [Phase 2, user decision U-1]: `POST /api/reset` keeps the PLAN §8 contract exactly: any POST returns 200 `{"status": "ok"}`; no Content-Type or body precondition, no 400 path (RESEARCH A7 not adopted; E2E reset calls need no special body)
 
 ### Pending Todos
 
