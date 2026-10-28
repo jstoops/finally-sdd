@@ -214,3 +214,8 @@ None. No external service configuration is required.
 ---
 *Phase: 02-trading-and-live-portfolio*
 *Completed: 2026-10-28*
+
+## Self-Check: PASSED
+
+- All 9 created source/test files and this SUMMARY exist on disk
+- Task commit `b384a91` is an ancestor of HEAD
