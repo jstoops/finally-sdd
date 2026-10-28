@@ -6,6 +6,7 @@ import {
   livePortfolio,
   moneySign,
   pctSign,
+  pnlColor,
   STARTING_CASH,
   toCents,
 } from "@/domain/portfolio";
@@ -160,5 +161,30 @@ describe("signs and signed money", () => {
     expect(pctSign(0.004)).toBe("flat");
     expect(pctSign(-0.006)).toBe("down");
     expect(pctSign(1.5)).toBe("up");
+  });
+});
+
+describe("pnlColor", () => {
+  it("is the neutral border color at 0%", () => {
+    expect(pnlColor(0)).toBe("rgb(48, 54, 61)");
+  });
+
+  it("reaches the up color at +5% and clamps beyond it", () => {
+    expect(pnlColor(5)).toBe("rgb(34, 197, 94)");
+    expect(pnlColor(12)).toBe("rgb(34, 197, 94)");
+  });
+
+  it("reaches the down color at -5% and clamps beyond it", () => {
+    expect(pnlColor(-5)).toBe("rgb(239, 68, 68)");
+    expect(pnlColor(-40)).toBe("rgb(239, 68, 68)");
+  });
+
+  it("mixes each channel halfway at +2.5% and -2.5%, rounded", () => {
+    expect(pnlColor(2.5)).toBe("rgb(41, 126, 78)");
+    expect(pnlColor(-2.5)).toBe("rgb(144, 61, 65)");
+  });
+
+  it("treats a non-finite percent as neutral", () => {
+    expect(pnlColor(Number.NaN)).toBe("rgb(48, 54, 61)");
   });
 });
