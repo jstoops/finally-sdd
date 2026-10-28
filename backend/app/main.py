@@ -20,13 +20,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import create_system_router, create_watchlist_router
+from .api import create_portfolio_router, create_system_router, create_watchlist_router
 from .config import Settings, configure_logging
 from .db import Database
 from .errors import error_handlers
 from .market import MarketDataSource, PriceCache, create_market_data_source, create_stream_router
+from .portfolio import PortfolioService
 from .snapshots import SNAPSHOT_INTERVAL, SnapshotRecorder, run_snapshot_loop
 from .tracker import TickerTracker
+from .trading import TradeService
 from .watchlist import WatchlistService
 
 logger = logging.getLogger(__name__)
@@ -50,11 +52,14 @@ def create_app(
     cache = PriceCache()
     source = (source_factory or create_market_data_source)(cache)
     db = Database(settings.db_path)
-    # One lock serializes every state mutation: watchlist now, trades and reset in Phase 2
+    # One lock serializes every state mutation: watchlist edits, trades, reset and snapshots.
+    # asyncio.Lock is not reentrant: never call a lock-taking method while holding it.
     state_lock = asyncio.Lock()
     tracker = TickerTracker(db, source)
     watchlist = WatchlistService(db, cache, tracker, state_lock)
     recorder = SnapshotRecorder(db, cache, state_lock)
+    portfolio = PortfolioService(db, cache, tracker, state_lock)
+    trade_service = TradeService(db, cache, tracker, portfolio, state_lock)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -84,6 +89,8 @@ def create_app(
     app.state.source = source
     app.state.db = db
     app.state.state_lock = state_lock
+    app.state.trade_service = trade_service
+    app.state.portfolio_service = portfolio
 
     # D-13: CORS only for the `next dev` loop; never enabled by default or in Docker.
     if settings.dev_cors_origin:
@@ -98,6 +105,7 @@ def create_app(
     # No GZip middleware: it would buffer the SSE stream.
     app.include_router(create_stream_router(cache))
     app.include_router(create_watchlist_router(watchlist))
+    app.include_router(create_portfolio_router(trade_service, portfolio))
     app.include_router(create_system_router())
     install_api_not_found(app)  # after every /api router
     mount_static(app, settings.static_dir)  # last: "/" would shadow anything after it

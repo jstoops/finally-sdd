@@ -2,10 +2,17 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PriceFrame, PriceTick, StreamStatus, WatchlistEntry } from "@/api/types";
+import type {
+  PriceFrame,
+  PriceTick,
+  StreamStatus,
+  TradeResponse,
+  WatchlistEntry,
+} from "@/api/types";
 import Home from "@/app/page";
 import { ConnectionDot, Header } from "@/components/Header";
 import { Terminal } from "@/components/Terminal";
+import { usePortfolio } from "@/store/portfolio";
 import { SPARK_MAX, usePrices } from "@/store/prices";
 import { useWatchlist } from "@/store/watchlist";
 import { FakeEventSource } from "@/test/FakeEventSource";
@@ -89,6 +96,7 @@ async function renderTerminal(entries: WatchlistEntry[] = ENTRIES) {
 beforeEach(() => {
   usePrices.setState({ ticks: {}, lastTs: {}, spark: {}, status: "connecting" });
   useWatchlist.setState({ entries: [], loaded: false, loadError: null, selected: null });
+  usePortfolio.setState({ cash: null, positions: [] });
 });
 
 afterEach(() => {
@@ -315,6 +323,7 @@ describe("Terminal", () => {
       "panel-heatmap",
       "panel-pnl",
       "panel-positions",
+      "panel-trade",
       "panel-chat",
     ]) {
       expect(screen.getByTestId(id)).toBeInTheDocument();
@@ -322,8 +331,9 @@ describe("Terminal", () => {
     expect(screen.getByTestId("panel-heatmap")).toHaveTextContent("Heatmap — coming in Phase 2");
     expect(screen.getByTestId("panel-pnl")).toHaveTextContent("P&L — coming in Phase 2");
     expect(screen.getByTestId("panel-positions")).toHaveTextContent(
-      "Positions & Trade — coming in Phase 2",
+      "Positions — coming in Phase 2",
     );
+    expect(screen.getByTestId("panel-trade")).toBeInTheDocument();
     expect(screen.getByTestId("panel-chat")).toHaveTextContent("AI Chat — coming in Phase 3");
     expect(screen.getByRole("banner")).toHaveTextContent(/^FinAlly$/);
     expect(screen.getByRole("banner").querySelectorAll("button")).toHaveLength(0);
@@ -421,5 +431,102 @@ describe("Terminal", () => {
     await act(async () => {});
     const error = screen.getByText("Backend unavailable");
     expect(error).toHaveClass("text-down");
+  });
+
+  it("buys from the trade bar and confirms the fill", async () => {
+    const tradeResponse: TradeResponse = {
+      trade: {
+        id: "t-1",
+        ticker: "AAPL",
+        side: "buy",
+        quantity: 10,
+        price: 190.52,
+        executed_at: "2026-10-09T14:03:22Z",
+      },
+      portfolio: {
+        cash_balance: 8094.8,
+        positions_value: 1905.2,
+        total_value: 10000,
+        unrealized_pnl: 0,
+        positions: [
+          {
+            ticker: "AAPL",
+            quantity: 10,
+            avg_cost: 190.52,
+            current_price: 190.52,
+            market_value: 1905.2,
+            unrealized_pnl: 0,
+            unrealized_pnl_percent: 0,
+            weight: 1,
+          },
+        ],
+      },
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/watchlist") return jsonResponse({ tickers: ENTRIES });
+      if (url === "/api/portfolio/trade" && init?.method === "POST") {
+        return jsonResponse(tradeResponse);
+      }
+      return jsonResponse({ ticker: "AAPL", points: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const confirmSpy = vi.spyOn(window, "confirm");
+    render(<Terminal />);
+    await act(async () => {});
+
+    fireEvent.change(screen.getByTestId("trade-ticker"), { target: { value: "aapl" } });
+    fireEvent.change(screen.getByTestId("trade-qty"), { target: { value: "10" } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("trade-buy"));
+    });
+
+    const tradeCalls = fetchMock.mock.calls.filter(
+      ([input]) => String(input) === "/api/portfolio/trade",
+    );
+    expect(tradeCalls).toHaveLength(1);
+    const [, init] = tradeCalls[0];
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ ticker: "AAPL", quantity: 10, side: "buy" });
+
+    const message = screen.getByTestId("trade-message");
+    expect(message).toHaveTextContent("Bought 10 AAPL @ $190.52");
+    expect(message).toHaveAttribute("data-kind", "success");
+    expect(usePortfolio.getState().cash).toBe(8094.8);
+    expect(usePortfolio.getState().positions.map((p) => p.ticker)).toEqual(["AAPL"]);
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("shows a trade error inline", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/watchlist") return jsonResponse({ tickers: ENTRIES });
+      if (url === "/api/portfolio/trade") {
+        return jsonResponse(
+          { error: "No price available for ZZZZ. Add it to your watchlist first." },
+          400,
+        );
+      }
+      return jsonResponse({ ticker: "AAPL", points: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Terminal />);
+    await act(async () => {});
+
+    fireEvent.change(screen.getByTestId("trade-ticker"), { target: { value: "zzzz" } });
+    fireEvent.change(screen.getByTestId("trade-qty"), { target: { value: "1" } });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("trade-sell"));
+    });
+
+    const message = screen.getByTestId("trade-message");
+    expect(message).toHaveTextContent(
+      "No price available for ZZZZ. Add it to your watchlist first.",
+    );
+    expect(message).toHaveAttribute("data-kind", "error");
+    expect(message).toHaveAttribute("role", "alert");
+    expect(message).toHaveClass("text-down");
+    expect(usePortfolio.getState().cash).toBeNull();
   });
 });
