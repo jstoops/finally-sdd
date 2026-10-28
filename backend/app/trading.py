@@ -2,10 +2,13 @@
 
 `TradeService.execute` is the only code that changes cash, positions or trades. It takes
 the shared state lock, fills at the cached price inside one BEGIN IMMEDIATE transaction
-on a worker thread, and builds the response portfolio while still holding the lock, so
-the response matches the committed state. Rule failures raise DomainError (400).
+on a worker thread (cash, position, trades row and portfolio snapshot together),
+reconciles the tracked tickers after the commit, and builds the response portfolio
+while still holding the lock, so the response matches the committed state. Rule
+failures raise DomainError (400) and change nothing.
 
-Never call the lock-taking snapshot recorder from here: it takes the same `asyncio.Lock`,
+The snapshot is written with `insert_snapshot` on the trade's own connection. Never
+call the lock-taking snapshot recorder from here: it takes the same `asyncio.Lock`,
 which is not reentrant, so the trade would deadlock.
 """
 
@@ -21,6 +24,7 @@ from .errors import DomainError
 from .market import PriceCache
 from .money import format_money, format_qty, notional, round4, to_cents
 from .portfolio import PortfolioService
+from .snapshots import insert_snapshot
 from .tickers import normalize_ticker
 from .tracker import TickerTracker
 
@@ -75,7 +79,7 @@ class TradeService:
     ) -> None:
         self._db = db
         self._cache = cache
-        self._tracker = tracker  # plan 02-02 reconciles tracked tickers after each fill
+        self._tracker = tracker
         self._portfolio = portfolio
         self._lock = lock
 
@@ -92,6 +96,9 @@ class TradeService:
         qty = round4(float(quantity))
         async with self._lock:
             trade = await asyncio.to_thread(self._trade_tx, ticker, qty, side)
+            # After the commit: a buy of an unwatched ticker starts tracking it, a sell of
+            # an unwatched ticker to zero stops it. A failure is logged; the fill stands.
+            await self._tracker.reconcile_quietly(f"{side} {ticker}")
             portfolio = await asyncio.to_thread(self._portfolio.view_sync)
         logger.info("Trade: %s %s %s @ %s", trade.side, trade.quantity, trade.ticker, trade.price)
         return TradeResult(trade=trade, portfolio=portfolio)
@@ -180,4 +187,6 @@ class TradeService:
                     trade.executed_at,
                 ),
             )
+            # PF-02: the snapshot commits (or rolls back) with the trade itself
+            insert_snapshot(conn, self._cache)
         return trade
