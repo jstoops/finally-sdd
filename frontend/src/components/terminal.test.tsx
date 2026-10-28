@@ -133,7 +133,13 @@ async function renderTerminal(entries: WatchlistEntry[] = ENTRIES, routes: Route
 
 beforeEach(() => {
   usePrices.setState({ ticks: {}, lastTs: {}, spark: {}, status: "connecting" });
-  useWatchlist.setState({ entries: [], loaded: false, loadError: null, selected: null });
+  useWatchlist.setState({
+    entries: [],
+    loaded: false,
+    loadError: null,
+    selected: null,
+    held: [],
+  });
   usePortfolio.setState({ cash: null, positions: [], loaded: false, loadError: null });
 });
 
@@ -400,6 +406,40 @@ describe("selection", () => {
     expect(useWatchlist.getState().selected).toBe("PYPL");
     setEntries([]);
     expect(useWatchlist.getState().selected).toBeNull();
+  });
+
+  it("keeps a held but unwatched selection across watchlist changes until it is no longer held", () => {
+    const { setEntries, setHeld, select } = useWatchlist.getState();
+    setEntries(ENTRIES);
+    setHeld(["TSLA"]);
+    select("TSLA");
+    setEntries([ENTRIES[0], ENTRIES[1]]);
+    expect(useWatchlist.getState().selected).toBe("TSLA");
+    useWatchlist.getState().setHeld([]);
+    expect(useWatchlist.getState().selected).toBe("AAPL");
+  });
+
+  it("charts a held unwatched ticker and falls back when the position is sold to zero", async () => {
+    await renderTerminal(ENTRIES, {
+      "GET /api/portfolio": portfolioOf(5000, [position("TSLA", 2, 250)]),
+      "POST /api/portfolio/trade": tradeResponseOf(portfolioOf(5500), "sell"),
+    });
+    expect(useWatchlist.getState().held).toEqual(["TSLA"]);
+
+    act(() => useWatchlist.getState().select("TSLA"));
+    expect(within(screen.getByTestId("panel-chart")).getByText("TSLA")).toBeInTheDocument();
+
+    // A watchlist add keeps the held selection.
+    act(() => useWatchlist.getState().setEntries([...ENTRIES, entry("NFLX", 600, 600)]));
+    expect(useWatchlist.getState().selected).toBe("TSLA");
+
+    // Selling TSLA to zero drops it from the held set: the selection falls back.
+    await act(async () => {
+      await usePortfolio.getState().trade("TSLA", 2, "sell");
+    });
+    expect(useWatchlist.getState().held).toEqual([]);
+    expect(useWatchlist.getState().selected).toBe("AAPL");
+    expect(within(screen.getByTestId("panel-chart")).getByText("AAPL")).toBeInTheDocument();
   });
 });
 
