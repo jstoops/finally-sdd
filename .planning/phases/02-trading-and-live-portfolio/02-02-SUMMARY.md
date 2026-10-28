@@ -140,7 +140,7 @@ status: complete
 
 # Phase 2 Plan 02: Trade Rules, Snapshots and Tracked Tickers Summary
 
-**Each fill now writes its portfolio snapshot inside the same BEGIN IMMEDIATE transaction as cash, position and trade row. Tracked tickers are reconciled after commit while the state lock is still held. A service-level input gate rejects NaN, Infinity, non-positive, sub-0.0001 and sub-cent buy orders before any SQL runs. 128 new tests cover the PLAN §7 rules, including the 20-way parallel-buy race and the half-cent P&L parity table.**
+**Each fill now writes its portfolio snapshot inside the same BEGIN IMMEDIATE transaction as cash, position and trade row. Tracked tickers are reconciled after commit while the state lock is still held. A service-level input gate rejects NaN, Infinity, non-positive, sub-0.0001 and sub-cent buy orders before any SQL runs. 85 new tests cover the PLAN §7 rules, including the 20-way parallel-buy race and the half-cent P&L parity table.**
 
 ## Performance
 
@@ -231,3 +231,8 @@ None. No external service configuration is required.
 ---
 *Phase: 02-trading-and-live-portfolio*
 *Completed: 2026-10-28*
+
+## Self-Check: PASSED
+
+- Created files exist: backend/tests/test_trading.py, backend/tests/test_money.py, backend/tests/test_valuation.py
+- Task commits 62ad462, 2a929d3, 320cf42 and a74b5d3 are ancestors of HEAD
