@@ -188,3 +188,63 @@ class TestTrades:
 
         trades = trade_client.get("/api/trades").json()["trades"]
         assert [t["id"] for t in trades] == [third, second, first]
+
+
+SNAPSHOT_KEYS = ["total_value", "recorded_at"]
+
+
+def insert_snapshot_row(db_path: str, total_value: float, recorded_at: str) -> None:
+    run_sql(
+        db_path,
+        "INSERT INTO portfolio_snapshots (id, user_id, total_value, recorded_at) "
+        "VALUES (?, 'default', ?, ?)",
+        (str(uuid.uuid4()), total_value, recorded_at),
+    )
+
+
+class TestHistory:
+    def test_fresh_app_has_the_startup_snapshot(self, trade_client):
+        res = trade_client.get("/api/portfolio/history")
+        assert res.status_code == 200
+        body = res.json()
+        assert list(body) == ["snapshots"]
+        [snapshot] = body["snapshots"]
+        assert list(snapshot) == SNAPSHOT_KEYS
+        assert snapshot["total_value"] == 10000.0
+        assert ISO_RE.match(snapshot["recorded_at"])
+
+    def test_each_buy_appends_the_post_trade_total_oldest_first(self, trade_client):
+        trade_client.post(
+            "/api/portfolio/trade", json={"ticker": "AAPL", "quantity": 10, "side": "buy"}
+        )
+        trade_client.app.state.cache.update("AAPL", 200.52)
+        trade_client.post(
+            "/api/portfolio/trade", json={"ticker": "AAPL", "quantity": 1, "side": "buy"}
+        )
+        total = trade_client.get("/api/portfolio").json()["total_value"]
+        assert total == 10100.0
+
+        snapshots = trade_client.get("/api/portfolio/history").json()["snapshots"]
+        assert [s["total_value"] for s in snapshots] == [10000.0, 10000.0, total]
+        times = [s["recorded_at"] for s in snapshots]
+        assert times == sorted(times)
+        for snapshot in snapshots:
+            assert list(snapshot) == SNAPSHOT_KEYS
+
+    def test_same_second_snapshots_keep_insertion_order(self, trade_client):
+        db_path = trade_client.app.state.db.path
+        run_sql(db_path, "DELETE FROM portfolio_snapshots")
+        for value in (10001.0, 10002.0, 10003.0):
+            insert_snapshot_row(db_path, value, "2026-10-09T14:00:00Z")
+
+        snapshots = trade_client.get("/api/portfolio/history").json()["snapshots"]
+        assert [s["total_value"] for s in snapshots] == [10001.0, 10002.0, 10003.0]
+
+    def test_orders_by_recorded_at_before_insertion(self, trade_client):
+        db_path = trade_client.app.state.db.path
+        run_sql(db_path, "DELETE FROM portfolio_snapshots")
+        insert_snapshot_row(db_path, 2.0, "2026-10-09T14:00:02Z")
+        insert_snapshot_row(db_path, 1.0, "2026-10-09T14:00:01Z")
+
+        snapshots = trade_client.get("/api/portfolio/history").json()["snapshots"]
+        assert [s["total_value"] for s in snapshots] == [1.0, 2.0]

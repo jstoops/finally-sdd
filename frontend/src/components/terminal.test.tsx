@@ -7,6 +7,8 @@ import type {
   Position,
   PriceFrame,
   PriceTick,
+  Snapshot,
+  SnapshotsResponse,
   StreamStatus,
   TradeResponse,
   WatchlistEntry,
@@ -27,6 +29,7 @@ vi.mock("lightweight-charts", async (importOriginal) => {
     update: vi.fn(),
     createPriceLine: vi.fn(() => ({ applyOptions: vi.fn() })),
     removePriceLine: vi.fn(),
+    applyOptions: vi.fn(),
   };
   const chart = {
     addSeries: vi.fn(() => series),
@@ -140,7 +143,14 @@ beforeEach(() => {
     selected: null,
     held: [],
   });
-  usePortfolio.setState({ cash: null, positions: [], loaded: false, loadError: null });
+  usePortfolio.setState({
+    cash: null,
+    positions: [],
+    loaded: false,
+    loadError: null,
+    snapshots: [],
+    historyLoaded: false,
+  });
 });
 
 afterEach(() => {
@@ -295,6 +305,65 @@ describe("portfolio store", () => {
     expect(usePortfolio.getState().cash).toBe(8094.8);
     await usePortfolio.getState().loadPortfolio();
     expect(usePortfolio.getState().cash).toBe(9000);
+  });
+});
+
+describe("portfolio store history", () => {
+  const SNAPS: Snapshot[] = [
+    { total_value: 10000, recorded_at: "2026-10-09T14:00:00Z" },
+    { total_value: 10012.5, recorded_at: "2026-10-09T14:00:30Z" },
+  ];
+
+  it("loadHistory applies the snapshots and marks the history loaded", async () => {
+    stubApi({ "GET /api/portfolio/history": { snapshots: SNAPS } });
+    await usePortfolio.getState().loadHistory();
+    expect(usePortfolio.getState().snapshots).toEqual(SNAPS);
+    expect(usePortfolio.getState().historyLoaded).toBe(true);
+  });
+
+  it("loadHistory ignores a malformed body", async () => {
+    stubApi({ "GET /api/portfolio/history": { trades: [] } });
+    await usePortfolio.getState().loadHistory();
+    expect(usePortfolio.getState().snapshots).toEqual([]);
+    expect(usePortfolio.getState().historyLoaded).toBe(false);
+  });
+
+  it("discards an older history response that resolves after a newer one", async () => {
+    const releases: ((body: SnapshotsResponse) => void)[] = [];
+    stubApi({
+      "GET /api/portfolio/history": () =>
+        new Promise<SnapshotsResponse>((resolve) => {
+          releases.push(resolve);
+        }),
+    });
+    const older = usePortfolio.getState().loadHistory();
+    const newer = usePortfolio.getState().loadHistory();
+    await act(async () => {});
+    releases[1]({ snapshots: SNAPS });
+    await newer;
+    releases[0]({ snapshots: [SNAPS[0]] });
+    await older;
+    expect(usePortfolio.getState().snapshots).toEqual(SNAPS);
+  });
+
+  it("a successful trade refetches the history", async () => {
+    const fetchMock = stubApi({
+      "POST /api/portfolio/trade": tradeResponseOf(portfolioOf(8094.8)),
+      "GET /api/portfolio/history": { snapshots: SNAPS },
+    });
+    await usePortfolio.getState().trade("AAPL", 10, "buy");
+    await act(async () => {});
+    expect(callsTo(fetchMock, "/api/portfolio/history")).toHaveLength(1);
+    expect(usePortfolio.getState().snapshots).toEqual(SNAPS);
+  });
+
+  it("refresh() loads the portfolio, the trades and the history", async () => {
+    const fetchMock = stubApi({ "GET /api/portfolio/history": { snapshots: SNAPS } });
+    await usePortfolio.getState().refresh();
+    expect(callsTo(fetchMock, "/api/portfolio")).toHaveLength(1);
+    expect(callsTo(fetchMock, "/api/trades")).toHaveLength(1);
+    expect(callsTo(fetchMock, "/api/portfolio/history")).toHaveLength(1);
+    expect(usePortfolio.getState().snapshots).toEqual(SNAPS);
   });
 });
 
@@ -483,7 +552,9 @@ describe("Terminal", () => {
     expect(screen.getByTestId("heatmap-empty")).toHaveTextContent(
       "No positions — buy something or ask FinAlly",
     );
-    expect(screen.getByTestId("panel-pnl")).toHaveTextContent("P&L — coming in Phase 2");
+    expect(screen.getByTestId("panel-pnl")).not.toHaveTextContent("P&L — coming in Phase 2");
+    expect(screen.getByTestId("pnl-chart")).toBeInTheDocument();
+    expect(screen.queryAllByText(/coming in Phase/)).toHaveLength(1);
     expect(screen.getByTestId("panel-positions")).not.toHaveTextContent(
       "Positions — coming in Phase 2",
     );
