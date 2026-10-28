@@ -1,7 +1,9 @@
 "use client";
 
-// Phase 1 header (D-02): the wordmark and the price-stream status dot, nothing else.
+// Header: the wordmark, the price-stream status dot and the account's Cash readout.
 import type { StreamStatus } from "@/api/types";
+import { formatMoney } from "@/domain/portfolio";
+import { usePortfolio } from "@/store/portfolio";
 import { usePrices } from "@/store/prices";
 
 const DOT: Record<StreamStatus, { className: string; label: string }> = {
@@ -26,10 +28,17 @@ export function ConnectionDot() {
 }
 
 export function Header() {
+  const cash = usePortfolio((s) => s.cash);
   return (
     <header className="flex h-9 items-center gap-2 border-b border-border bg-panel px-3">
       <h1 className="font-mono font-semibold text-accent">FinAlly</h1>
       <ConnectionDot />
+      <div className="ml-auto flex items-baseline gap-1.5 text-xs">
+        <span className="text-muted">Cash</span>
+        <span data-testid="header-cash" className="font-mono tabular-nums">
+          {formatMoney(cash)}
+        </span>
+      </div>
     </header>
   );
 }

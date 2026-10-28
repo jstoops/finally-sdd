@@ -10,6 +10,7 @@ import { ChartPanel } from "@/components/ChartPanel";
 import { Header } from "@/components/Header";
 import { TradePanel } from "@/components/TradeBar";
 import { Watchlist } from "@/components/Watchlist";
+import { usePortfolio } from "@/store/portfolio";
 import { startPriceStream, usePrices } from "@/store/prices";
 import { useWatchlist } from "@/store/watchlist";
 
@@ -41,15 +42,19 @@ export function Terminal() {
   useEffect(() => {
     const { loadWatchlist } = useWatchlist.getState();
     void loadWatchlist();
-    // Re-fetch the watchlist when the stream (re)opens after a drop: this resyncs after a
-    // backend restart and recovers from a failed first load. The first open after mount
-    // re-fetches only if that initial load failed.
+    void usePortfolio.getState().refresh();
+    // Re-fetch the watchlist and the portfolio when the stream (re)opens after a drop: this
+    // resyncs after a backend restart and recovers from a failed first load (Pitfall 11).
+    // The first open after mount re-fetches only what failed to load initially.
     let openedBefore = false;
     const unsubscribe = usePrices.subscribe((state, prev) => {
       if (state.status !== "open" || prev.status === "open") return;
       const reconnected = openedBefore;
       openedBefore = true;
       if (reconnected || useWatchlist.getState().loadError !== null) void loadWatchlist();
+      if (reconnected || usePortfolio.getState().loadError !== null) {
+        void usePortfolio.getState().refresh();
+      }
     });
     const stopStream = startPriceStream();
     return () => {
