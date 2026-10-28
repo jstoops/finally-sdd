@@ -5,7 +5,15 @@
 import { create } from "zustand";
 
 import { ApiError, apiFetch } from "@/api/client";
-import type { Portfolio, Position, Side, Snapshot, Trade, TradeResponse } from "@/api/types";
+import type {
+  Portfolio,
+  Position,
+  ResetResponse,
+  Side,
+  Snapshot,
+  Trade,
+  TradeResponse,
+} from "@/api/types";
 
 const NETWORK_ERROR = "Could not reach the server. Try again.";
 const LOAD_ERROR = "Could not load the portfolio.";
@@ -105,6 +113,11 @@ interface PortfolioState {
   refresh: () => Promise<void>;
   /** POST /api/portfolio/trade. Resolves to the recorded fill, or an inline error message. */
   trade: (ticker: string, quantity: number, side: Side) => Promise<TradeOutcome>;
+  /**
+   * POST /api/reset, then refresh(). Resolves null on success, or the error message.
+   * The caller reloads the watchlist (the stores never import each other).
+   */
+  reset: () => Promise<string | null>;
 }
 
 export const usePortfolio = create<PortfolioState>()((set, get) => ({
@@ -182,5 +195,14 @@ export const usePortfolio = create<PortfolioState>()((set, get) => ({
     } catch (err) {
       return { error: failureMessage(err) };
     }
+  },
+  reset: async () => {
+    try {
+      await apiFetch<ResetResponse>("/api/reset", { method: "POST" });
+    } catch (err) {
+      return failureMessage(err);
+    }
+    await get().refresh();
+    return null;
   },
 }));

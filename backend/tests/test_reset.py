@@ -41,8 +41,7 @@ def count(db_path: str, table: str) -> int:
 
 def watchlist(db_path: str) -> list[str]:
     return [
-        row[0]
-        for row in run_sql(db_path, "SELECT ticker FROM watchlist ORDER BY added_at, rowid")
+        row[0] for row in run_sql(db_path, "SELECT ticker FROM watchlist ORDER BY added_at, rowid")
     ]
 
 

@@ -1,14 +1,18 @@
 "use client";
 
-// Header: the wordmark, the price-stream status dot and the simulated account's Total, Cash
-// and P&L since start (PF-04, PF-05).
-import { useMemo } from "react";
+// Header: the wordmark, the price-stream status dot, the simulated account's Total, Cash
+// and P&L since start (PF-04, PF-05) and the Reset button (PF-09).
+import { useMemo, useState } from "react";
 
 import type { StreamStatus } from "@/api/types";
 import type { Sign } from "@/domain/market";
 import { formatMoney, formatSignedMoney, livePortfolio, moneySign } from "@/domain/portfolio";
 import { usePortfolio } from "@/store/portfolio";
 import { usePrices } from "@/store/prices";
+import { useWatchlist } from "@/store/watchlist";
+
+export const RESET_CONFIRM =
+  "Reset your account? This restores $10,000 cash and the default watchlist and deletes all positions, trades and chat history.";
 
 const DOT: Record<StreamStatus, { className: string; label: string }> = {
   open: { className: "bg-up", label: "Price stream connected" },
@@ -60,6 +64,45 @@ function Readout({
   );
 }
 
+/** Reset with a window.confirm gate; refetches every panel and shows a failure inline. */
+function ResetButton() {
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  // window is touched only inside the click handler (static export prerender).
+  const onClick = async () => {
+    if (!window.confirm(RESET_CONFIRM)) return;
+    setResetting(true);
+    setResetError(null);
+    try {
+      const err = await usePortfolio.getState().reset();
+      if (err === null) void useWatchlist.getState().loadWatchlist();
+      else setResetError(err);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {resetError !== null && (
+        <span data-testid="reset-error" role="alert" className="text-down">
+          {resetError}
+        </span>
+      )}
+      <button
+        type="button"
+        data-testid="reset-button"
+        onClick={() => void onClick()}
+        disabled={resetting}
+        className="rounded border border-border px-2 py-0.5 text-muted hover:border-accent hover:text-accent disabled:cursor-wait disabled:opacity-50"
+      >
+        Reset
+      </button>
+    </div>
+  );
+}
+
 export function Header() {
   // Raw-field selectors only; derived values come from useMemo so no selector returns a new
   // object per render (Pitfall 8). Total and P&L follow every SSE frame without any polling.
@@ -86,6 +129,7 @@ export function Header() {
           sign={pnlSign}
           className={SIGN_CLASS[pnlSign]}
         />
+        <ResetButton />
       </div>
     </header>
   );
