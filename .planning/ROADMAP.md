@@ -101,7 +101,20 @@ Plans:
   4. Reloading the page restores the last 50 chat messages with their action chips exactly as they first appeared; Reset (disabled while a chat request is in flight) clears the chat panel, sparklines and chart selection and refetches every panel.
   5. On a wide screen the header, watchlist, main chart, heatmap, P&L chart, positions table, trade bar and collapsible chat panel are all visible at once and stay usable on a tablet; the backend pytest, frontend unit and Playwright suites pass, with E2E run from `test/docker-compose.test.yml` under `LLM_MOCK=true`, resetting before each test and covering all seven PLAN §12 scenarios.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+- [ ] 03-01-PLAN.md — Tracer: "buy" in the chat panel → POST /api/chat → ChatService (mock LLM → parse → TradeService) → stored reply → chip and panel refetch
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 03-02-PLAN.md — Every chat rule: lenient parse, per-item validation, 10 + 10 caps, G-20, ⚠️ failure notes, 400/502, FinAlly prompt with live context and 20-message history, GET /api/chat/history
+- [ ] 03-03-PLAN.md — Complete chat panel (history reload, Enter, loading, chips, bubbles, prompt chips, collapse), PF-10 reset, all panels at once, test hooks
+- [ ] 03-04-PLAN.md — Blocking legitimacy gate, litellm 1.106.2, OpenRouter → Cerebras client (strict schema, off-loop), key setting, 503 when unconfigured, human-run spike
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 03-05-PLAN.md — Isolated Playwright E2E (seven PLAN §12 scenarios + layout) from test/docker-compose.test.yml, and the full-suite phase gate
+
 **UI hint**: yes
 
 ## Planning Notes
@@ -132,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Live Market Terminal | 7/7 | Complete    | 2026-10-27 |
 | 2. Trading and Live Portfolio | 7/7 | Complete    | 2026-10-28 |
-| 3. AI Copilot and Complete Terminal | 0/TBD | Not started | - |
+| 3. AI Copilot and Complete Terminal | 0/5 | Not started | - |
 
 ## Backlog
 
