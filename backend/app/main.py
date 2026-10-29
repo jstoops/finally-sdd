@@ -20,7 +20,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import create_portfolio_router, create_system_router, create_watchlist_router
+from .api import (
+    create_chat_router,
+    create_portfolio_router,
+    create_system_router,
+    create_watchlist_router,
+)
+from .chat import ChatService, LLMClient, MockLLMClient
 from .config import Settings, configure_logging
 from .db import Database
 from .errors import error_handlers
@@ -41,10 +47,14 @@ def create_app(
     *,
     source_factory: SourceFactory | None = None,
     snapshot_interval: float = SNAPSHOT_INTERVAL,
+    llm_client: LLMClient | None = None,
 ) -> FastAPI:
     """Build the app. Objects are inert until lifespan runs (PLAN §3 startup order).
 
     `snapshot_interval` is a test seam; production uses the 30-second default.
+    `llm_client` is a test seam like `source_factory`: when given it answers every
+    chat; otherwise LLM_MOCK=true selects the mock client, and with neither the
+    chat endpoint returns 503.
     """
     configure_logging()
     # Settings.from_env loads .env BEFORE the market factory reads MASSIVE_API_KEY
@@ -60,6 +70,14 @@ def create_app(
     recorder = SnapshotRecorder(db, cache, state_lock)
     portfolio = PortfolioService(db, cache, tracker, state_lock)
     trade_service = TradeService(db, cache, tracker, portfolio, state_lock)
+    # The client is chosen once: override, then the mock (checked before any key), else none.
+    # Chat gets the services, never the lock: they take it themselves.
+    chat_client = llm_client
+    if chat_client is None and settings.llm_mock:
+        chat_client = MockLLMClient()
+    chat_service = ChatService(db, portfolio, watchlist, trade_service, chat_client)
+    chat_mode = "custom" if llm_client is not None else "mock" if chat_client else "disabled"
+    logger.info("App: chat mode %s", chat_mode)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -91,6 +109,7 @@ def create_app(
     app.state.state_lock = state_lock
     app.state.trade_service = trade_service
     app.state.portfolio_service = portfolio
+    app.state.chat_service = chat_service
 
     # D-13: CORS only for the `next dev` loop; never enabled by default or in Docker.
     if settings.dev_cors_origin:
@@ -106,6 +125,7 @@ def create_app(
     app.include_router(create_stream_router(cache))
     app.include_router(create_watchlist_router(watchlist))
     app.include_router(create_portfolio_router(trade_service, portfolio))
+    app.include_router(create_chat_router(chat_service))
     app.include_router(create_system_router())
     install_api_not_found(app)  # after every /api router
     mount_static(app, settings.static_dir)  # last: "/" would shadow anything after it
