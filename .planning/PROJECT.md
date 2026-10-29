@@ -33,19 +33,15 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 - ✓ Watchlist panel: flashing price, Chg % from session open, inline SVG sparkline, add/remove with inline errors — Phase 1
 - ✓ Main chart (Lightweight Charts) seeded from the history endpoint and extended from SSE — Phase 1
 - ✓ Multi-stage Dockerfile (Node 22 → Python 3.12 + uv, one uvicorn worker), `docker-compose.yml` with `finally-data`, idempotent start/stop scripts, `.env.example`, `db/.gitkeep` — Phase 1 (`start_mac.sh` browser launch still unverified on macOS/Linux; ROADMAP backlog 999.1)
+- ✓ `POST /api/portfolio/trade`: market orders at the cached price under the shared Trade Rules (ticker regex, qty > 0 rounded half-up to 4 dp and capped at 1,000,000,000, cash/shares checks with 1e-6 tolerance, avg-cost math, dust removal), one transaction under `state_lock`, then a snapshot; returns trade plus updated portfolio — Phase 2
+- ✓ `GET /api/portfolio` (cash, positions value, total, unrealized P&L, per-position P&L/P&L %/weight, avg-cost fallback), `GET /api/portfolio/history` (oldest first), `GET /api/trades` — Phase 2
+- ✓ `POST /api/reset`: one transaction restores the seeded state, re-syncs tracked tickers, records a fresh snapshot; PLAN §8 contract kept exactly (U-1) — Phase 2
+- ✓ Tracked tickers with positions: a held ticker removed from the watchlist keeps streaming; selling an unwatched ticker to zero drops it — Phase 2
+- ✓ Header live total, cash, P&L and Reset with `window.confirm`; positions table; squarified-treemap heatmap; P&L BaselineSeries chart at $10,000; trade bar with inline errors; trade history — all live from SSE with no `/api/portfolio` polling (P&L history polls every 30 s to match snapshots) — Phase 2 (UAT 02: 5/5)
 
 ### Active
 
 <!-- Everything else in planning/PLAN.md. Hypotheses until shipped. -->
-
-**Portfolio & trading**
-- [ ] `POST /api/portfolio/trade`: market orders at the cached price, shared Trade Rules (ticker regex, qty > 0 rounded to 4dp, cash/shares checks with 1e-6 tolerance, avg-cost math, dust removal), one transaction, then a snapshot; returns trade plus updated portfolio
-- [ ] `GET /api/portfolio`: cash, positions value, total, unrealized P&L, per-position P&L, P&L %, and weight; falls back to avg cost when no price is cached
-- [ ] `GET /api/portfolio/history`: snapshots oldest first
-- [ ] `POST /api/reset`: one transaction restores the seeded state, re-syncs tracked tickers, and records a fresh snapshot
-
-**Tracked tickers**
-- [ ] Removing a held ticker from the watchlist keeps it priced; selling an unwatched ticker to zero drops it (reconcile exists; verify with positions)
 
 **AI chat**
 - [ ] `POST /api/chat` via LiteLLM → OpenRouter (`openrouter/openai/gpt-oss-120b`, Cerebras provider) with structured output (`message`, `trades`, `watchlist_changes`)
@@ -57,16 +53,12 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 - [ ] Missing `OPENROUTER_API_KEY` → 503; LLM failure or unparseable output → 502 with the user message still stored
 
 **Frontend (Next.js static export, TypeScript, Tailwind dark theme)**
-- [ ] Header: live total value, cash, Reset with `window.confirm`
-- [ ] Portfolio heatmap: in-house squarified treemap sized by weight, colored by P&L
-- [ ] P&L chart (Lightweight Charts) from `/api/portfolio/history`
-- [ ] Positions table: ticker, qty, avg cost, current price, unrealized P&L, P&L %
-- [ ] Trade bar: ticker, quantity, buy/sell, inline 400 errors
 - [ ] AI chat panel: collapsible, history loaded on page load, loading indicator, inline action confirmations, failed actions visibly distinct
-- [ ] Data flow: live values computed client-side from SSE plus positions; refetch after chat actions; full refetch and cleared chat/sparklines after reset
+- [ ] Data flow: refetch after chat actions; after reset, clear the chat panel, sparklines and chart selection (PF-10; Phase 2 reset already refetches server state)
 
 **Packaging & ops**
-- [ ] Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed; rebuild when sources are newer, or say so in the README quick start (UAT 01 gap, minor)
+- [ ] Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed; rebuild when sources are newer, or say so in the README quick start (UAT 01 gap, minor; bit again in UAT 02 test 5, where a stale image hid the 02-07 quantity cap)
+- [ ] Compose volume naming: an existing `finally_finally-data` volume no longer matches the compose file's `finally-data`, so a rebuild can start on a fresh database (seen during UAT 02)
 
 **Testing**
 - [ ] Backend pytest: tracked tickers, trade logic and edge cases, LLM parsing, partial failures and mock mode, API status codes and shapes, reset
@@ -87,7 +79,7 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 
 ## Context
 
-- **Current state (after Phase 1):** the walking skeleton ships in one container: app entry point, SQLite, watchlist API, SSE-driven terminal with watchlist, sparklines and main chart, Docker and start/stop scripts. Portfolio, trading, reset, AI chat and E2E tests are still absent.
+- **Current state (after Phase 2):** one container ships the live terminal plus manual trading: trade/portfolio/history/trades/reset APIs, and a header, positions table, heatmap, P&L chart, trade bar and trade history computed live from SSE. AI chat, reset clearing of sparklines/chat/selection (PF-10) and Playwright E2E remain for Phase 3.
 - **Established patterns to follow:** router factories (`create_*_router(deps)`) with no module-level state; dependencies built in `lifespan` and injected; blocking work kept off the event loop; only sources write to `PriceCache`; trades read prices from `PriceCache`.
 - **Single process:** `PriceCache` is process-local, so uvicorn must run with one worker.
 - **Known concerns (CONCERNS.md):** `MASSIVE_POLL_INTERVAL` can go as low as 1s, which exceeds the free-tier limit; SSE ticks are sent even when nothing changed; the test-module table in `MARKET_DATA_SUMMARY.md` is stale; there is no CI running ruff/pytest.
@@ -120,6 +112,10 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 | One shared `state_lock` (asyncio.Lock) per app for every mutation | Watchlist, snapshots, and Phase 2 trade/reset services must serialize against each other | ✓ Phase 1; Phase 2 must reuse it |
 | `NotFoundError` subclasses `DomainError` | Phase 3 chat actions can catch one type for every business failure | ✓ Phase 1 |
 | One authoritative ticker rule per side (`app/tickers.py`, `frontend/src/api/ticker.ts`), non-ASCII rejected before uppercasing | Prevents "aß" folding to "ASS"; no duplicated regexes | ✓ Phase 1 |
+| Trade quantity: StrictFloat at the route, capped at 1,000,000,000 on the raw value before rounding; oversized orders rejected, never clamped | 1e24 overflowed Decimal rounding into a 500; the Phase 3 executor needs every quantity failure to be a `DomainError` | ✓ Phase 2 (02-07) |
+| Trade error messages carry "need $X, have $Y" / "need N, have M" fragments | Phase 3 builds templated failure notes from them without a second LLM call | ✓ Phase 2 |
+| `POST /api/reset` keeps PLAN §8 exactly: no body, no headers, no 400 path | User decision U-1; E2E reset calls need no special body | ✓ Phase 2 |
+| P&L chart is a BaselineSeries at $10,000 and polls `/api/portfolio/history` every 30 s | Matches the backend snapshot timer so points appear without a trade; `/api/portfolio` itself is never polled | ✓ Phase 2 |
 
 ## Evolution
 
@@ -139,4 +135,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-27 after Phase 1*
+*Last updated: 2026-10-28 after Phase 2*

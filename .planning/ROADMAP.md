@@ -15,7 +15,7 @@ FinAlly goes from a finished market-data engine to a complete AI trading termina
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Live Market Terminal** - One command launches the container; the user watches a dark terminal stream, chart and edit a live watchlist (completed 2026-10-27)
-- [ ] **Phase 2: Trading and Live Portfolio** - The user trades from the trade bar and sees cash, positions, heatmap, P&L and trade history update live, then can reset
+- [x] **Phase 2: Trading and Live Portfolio** - The user trades from the trade bar and sees cash, positions, heatmap, P&L and trade history update live, then can reset (completed 2026-10-28)
 - [ ] **Phase 3: AI Copilot and Complete Terminal** - The user trades and manages the watchlist by chatting with FinAlly; the full terminal is proven end to end
 
 ## Phase Details
@@ -66,7 +66,7 @@ Plans:
   4. The P&L chart plots total portfolio value from snapshots recorded at startup, every 30 seconds and after each trade; it renders sensibly with a single point and refreshes every 30 seconds and after each trade.
   5. A held ticker removed from the watchlist keeps streaming and keeps its live P&L, and selling an unwatched ticker to zero stops pricing it; after confirming Reset in the header, the user sees $10,000 cash, no positions or trades, a fresh P&L starting point, and the default watchlist.
 
-**Plans**: 7/7 plans executed
+**Plans**: 7/7 plans complete
 
 Plans:
 **Wave 1**
@@ -131,7 +131,7 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Live Market Terminal | 7/7 | Complete    | 2026-10-27 |
-| 2. Trading and Live Portfolio | 7/7 | In Progress | - |
+| 2. Trading and Live Portfolio | 7/7 | Complete    | 2026-10-28 |
 | 3. AI Copilot and Complete Terminal | 0/TBD | Not started | - |
 
 ## Backlog

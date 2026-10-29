@@ -1,43 +1,43 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 02
-current_phase_name: Trading and Live Portfolio
-status: executing
-stopped_at: Phase 01 complete, ready to plan Phase 2
-last_updated: "2026-10-29T09:01:01.371Z"
+current_phase: 3
+current_phase_name: AI Copilot and Complete Terminal
+status: planning
+stopped_at: Phase 02 complete, ready to plan Phase 3
+last_updated: "2026-10-29T09:46:22.640Z"
 last_activity: 2026-10-28
-last_activity_desc: Phase 02 execution started
-state_head: 20773c78ebf2d6efa286b81bfb443519cb2adc47
+last_activity_desc: Phase 02 complete, transitioned to Phase 3
+state_head: 8bfaf33c36b533dfd77056cd5d448685867591da
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 14
-  completed_plans: 13
-  percent: 33
+  completed_plans: 14
+  percent: 67
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-27)
+See: .planning/PROJECT.md (updated 2026-10-28)
 
 **Core value:** A user can open one URL, watch prices stream live, and trade a simulated portfolio, either manually or by asking the AI copilot, with every number (cash, positions, P&L) staying correct and updating in real time.
-**Current focus:** Phase 02 — Trading and Live Portfolio
+**Current focus:** Phase 3 — AI Copilot and Complete Terminal
 
 ## Current Position
 
-Phase: 02 (Trading and Live Portfolio) — EXECUTING
-Plan: 7 of 7
-Status: Executing Phase 02
-Last activity: 2026-10-28 — Phase 02 execution started
+Phase: 3 — AI Copilot and Complete Terminal
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-28 — Phase 02 complete, transitioned to Phase 3
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 14
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -46,6 +46,7 @@ Progress: [███░░░░░░░] 33%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 7 | - | - |
+| 02 | 7 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 1]: `TickerTracker.reconcile` is the only app caller of `source.add_ticker`/`remove_ticker`; trades and reset must go through it
 - [Phase 1]: Business failures raise `DomainError` (400) / `NotFoundError` (404) and render as `{"error": ...}`
 - [Phase 2, user decision U-1]: `POST /api/reset` keeps the PLAN §8 contract exactly: any POST returns 200 `{"status": "ok"}`; no Content-Type or body precondition, no 400 path (RESEARCH A7 not adopted; E2E reset calls need no special body)
+- [Phase 2]: Trade quantity is StrictFloat and capped at 1,000,000,000; every quantity failure is a `DomainError`, so the Phase 3 per-action executor can catch one type
+- [Phase 2]: Trade errors carry "need $X, have $Y" fragments for Phase 3 templated failure notes
+- [Phase 2]: Reset does not clear sparklines, chat or chart selection; that is PF-10 in Phase 3
 
 ### Pending Todos
 
@@ -76,7 +80,9 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-- [Phase 1]: Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed (UAT 01 gap, minor); after pulling changes, run with `--build`
+- [Phase 1]: Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed (UAT 01 gap, minor); after pulling changes, run with `--build`. Recurred in UAT 02: always rebuild before UAT
+- [Phase 2]: Compose warns that the old `finally_finally-data` volume does not match `finally-data`; a rebuild may start on a fresh database
+- [Phase 2]: Advisory only: `GET /api/portfolio` snapshot isolation under concurrent trades has no interleaving test (VERIFICATION truth 14); review warnings WR-01 and WR-04 remain open and non-blocking
 - [Phase 3]: Cerebras strict-schema acceptance and OpenRouter provider fallback are unverified; spike a real call before building the chat pipeline
 
 ## Deferred Items
@@ -89,6 +95,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-27T17:05:00Z
-Stopped at: Phase 01 complete, ready to plan Phase 2
+Last session: 2026-10-28
+Stopped at: Phase 2 complete (UAT 5/5), ready to plan Phase 3
 Resume file: None

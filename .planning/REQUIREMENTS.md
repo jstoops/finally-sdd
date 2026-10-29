@@ -25,16 +25,16 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 
 ### Trading
 
-- [ ] **TRD-01**: A single trade service, used by both the manual trade route and the AI executor, normalizes the ticker (trim, uppercase, `^[A-Z][A-Z0-9.]{0,9}$`), requires quantity > 0 rounded to 4dp (a quantity that rounds to 0 is rejected), and fills at the cached price, rejecting with "No price available for {ticker}. Add it to your watchlist first." when none is cached
-- [ ] **TRD-02**: A buy is rejected when `quantity × price` exceeds cash; otherwise avg cost becomes `(old_qty × old_avg + qty × price) / (old_qty + qty)`
-- [ ] **TRD-03**: A sell is rejected when quantity exceeds the held quantity by more than `1e-6`; within tolerance the sold quantity is clamped to the held quantity; avg cost is unchanged; a remainder below `1e-6` deletes the position row (G-10)
-- [ ] **TRD-04**: Trade cost and the resulting cash balance are rounded to cents at write time, so cash never shows float noise (G-07)
-- [ ] **TRD-05**: Each trade updates cash, position and trade log in one `BEGIN IMMEDIATE` transaction, serialized by an in-process lock shared with reset, followed by a portfolio snapshot (G-08)
-- [ ] **TRD-06**: `POST /api/portfolio/trade` returns `200` with the trade and the updated portfolio (PLAN §8), or `400 {"error": ...}` for business-rule failures and `422` for malformed bodies
-- [ ] **TRD-07**: User can enter a ticker and quantity (fractional allowed) in the trade bar and click Buy or Sell; the order fills instantly with no confirmation dialog
-- [ ] **TRD-08**: User sees `400` errors inline beside the trade bar (and a generic message for `422`); the error clears on the next edit
-- [ ] **TRD-09**: After a successful manual trade, user sees a brief auto-clearing "Bought 10 AAPL @ $190.52" message using the returned fill price; the quantity field is cleared and the ticker field is kept (G-09)
-- [ ] **TRD-10** *(extra)*: User can see their trade history in an activity panel, newest first, fed by `GET /api/trades` (ticker, side, quantity, price, executed_at); it refreshes after manual trades, chat actions and reset
+- [x] **TRD-01**: A single trade service, used by both the manual trade route and the AI executor, normalizes the ticker (trim, uppercase, `^[A-Z][A-Z0-9.]{0,9}$`), requires quantity > 0 rounded to 4dp (a quantity that rounds to 0 is rejected), and fills at the cached price, rejecting with "No price available for {ticker}. Add it to your watchlist first." when none is cached
+- [x] **TRD-02**: A buy is rejected when `quantity × price` exceeds cash; otherwise avg cost becomes `(old_qty × old_avg + qty × price) / (old_qty + qty)`
+- [x] **TRD-03**: A sell is rejected when quantity exceeds the held quantity by more than `1e-6`; within tolerance the sold quantity is clamped to the held quantity; avg cost is unchanged; a remainder below `1e-6` deletes the position row (G-10)
+- [x] **TRD-04**: Trade cost and the resulting cash balance are rounded to cents at write time, so cash never shows float noise (G-07)
+- [x] **TRD-05**: Each trade updates cash, position and trade log in one `BEGIN IMMEDIATE` transaction, serialized by an in-process lock shared with reset, followed by a portfolio snapshot (G-08)
+- [x] **TRD-06**: `POST /api/portfolio/trade` returns `200` with the trade and the updated portfolio (PLAN §8), or `400 {"error": ...}` for business-rule failures and `422` for malformed bodies
+- [x] **TRD-07**: User can enter a ticker and quantity (fractional allowed) in the trade bar and click Buy or Sell; the order fills instantly with no confirmation dialog
+- [x] **TRD-08**: User sees `400` errors inline beside the trade bar (and a generic message for `422`); the error clears on the next edit
+- [x] **TRD-09**: After a successful manual trade, user sees a brief auto-clearing "Bought 10 AAPL @ $190.52" message using the returned fill price; the quantity field is cleared and the ticker field is kept (G-09)
+- [x] **TRD-10** *(extra)*: User can see their trade history in an activity panel, newest first, fed by `GET /api/trades` (ticker, side, quantity, price, executed_at); it refreshes after manual trades, chat actions and reset
 
 ### Watchlist & Tracked Tickers
 
@@ -43,7 +43,7 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 - [x] **WL-03**: User can add a ticker from the watchlist panel; `POST /api/watchlist` returns `201` for a new ticker, `200` with the existing entry for a duplicate, and `400` for a malformed ticker
 - [x] **WL-04**: User can remove a ticker from the watchlist panel; `DELETE /api/watchlist/{ticker}` returns `204`, or `404` when the ticker isn't on the watchlist
 - [x] **WL-05**: The watchlist is capped at 50 tickers; adding beyond the cap returns `400` with a clear message, for both manual and AI adds (G-13)
-- [ ] **WL-06**: One tracked-ticker service keeps the priced set equal to watchlist ∪ held positions: watchlist add starts pricing; removing a held ticker from the watchlist keeps it priced; selling an unwatched ticker to zero stops pricing it; reset re-syncs to the default watchlist
+- [x] **WL-06**: One tracked-ticker service keeps the priced set equal to watchlist ∪ held positions: watchlist add starts pricing; removing a held ticker from the watchlist keeps it priced; selling an unwatched ticker to zero stops pricing it; reset re-syncs to the default watchlist
 
 ### Market Data UI
 
@@ -54,19 +54,19 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 - [x] **MD-05**: User sees a sparkline (inline SVG polyline, no library) beside each watchlist ticker, accumulated from SSE since page load, capped to a fixed recent window, and cleared on reset (G-02)
 - [x] **MD-06**: User sees a main price chart (Lightweight Charts) for the selected ticker, seeded from `GET /api/prices/{ticker}/history` and extended with SSE points; out-of-order points are dropped and the time axis shows local `HH:MM:SS` (G-04)
 - [x] **MD-07**: User can click a watchlist row to chart it; on load the first watchlist ticker is selected; removing the selected ticker selects the first remaining one (or an empty state); reset selects the first default ticker (G-05)
-- [ ] **MD-08** *(extra)*: User can click a positions-table row or a heatmap tile to chart that ticker
+- [x] **MD-08** *(extra)*: User can click a positions-table row or a heatmap tile to chart that ticker
 
 ### Portfolio
 
-- [ ] **PF-01**: `GET /api/portfolio` returns cash, positions value, total value, unrealized P&L and per-position quantity, avg cost, current price, market value, P&L, P&L % and weight (PLAN §8); current price falls back to avg cost when uncached; weight is 0-safe with no positions; every `*_percent` field is in percent units, rounded to 4dp (G-12)
-- [ ] **PF-02**: Portfolio snapshots are recorded at startup, every 30 seconds, after each trade and after a reset, valuing held tickers at cached prices (avg-cost fallback)
-- [ ] **PF-03**: `GET /api/portfolio/history` returns snapshots oldest first
-- [ ] **PF-04**: User sees the portfolio total value and cash balance in the header, updating live from SSE prices × positions computed client-side, with no polling of `/api/portfolio`
-- [ ] **PF-05** *(extra)*: User sees "P&L since start" (`total_value − 10,000`) in the header, colored green/red and updating live
-- [ ] **PF-06**: User sees a positions table (ticker, quantity, avg cost, current price, unrealized P&L, P&L %) that recomputes live from SSE, colors P&L green/red, and displays percents with 2dp without re-multiplying by 100
-- [ ] **PF-07**: User sees a portfolio heatmap (in-house squarified treemap, positioned divs) with tiles sized by live weight and colored by P&L % on a diverging green/red scale clamped at ±5%; tiny tiles hide their label behind a tooltip; with no positions it shows "No positions — buy something or ask FinAlly" (G-06)
-- [ ] **PF-08**: User sees a P&L line chart (Lightweight Charts) of total value over time from `/api/portfolio/history`; it renders a single point gracefully and refetches every 30 seconds as well as after trades, chat actions and reset (G-03)
-- [ ] **PF-09**: User can reset the account from the header after a `window.confirm`; `POST /api/reset` returns `{"status": "ok"}` after one transaction restores $10,000 cash and the default watchlist and deletes positions, trades, snapshots and chat messages, then re-syncs tracked tickers and records a fresh snapshot; reset shares the trade lock (G-16)
+- [x] **PF-01**: `GET /api/portfolio` returns cash, positions value, total value, unrealized P&L and per-position quantity, avg cost, current price, market value, P&L, P&L % and weight (PLAN §8); current price falls back to avg cost when uncached; weight is 0-safe with no positions; every `*_percent` field is in percent units, rounded to 4dp (G-12)
+- [x] **PF-02**: Portfolio snapshots are recorded at startup, every 30 seconds, after each trade and after a reset, valuing held tickers at cached prices (avg-cost fallback)
+- [x] **PF-03**: `GET /api/portfolio/history` returns snapshots oldest first
+- [x] **PF-04**: User sees the portfolio total value and cash balance in the header, updating live from SSE prices × positions computed client-side, with no polling of `/api/portfolio`
+- [x] **PF-05** *(extra)*: User sees "P&L since start" (`total_value − 10,000`) in the header, colored green/red and updating live
+- [x] **PF-06**: User sees a positions table (ticker, quantity, avg cost, current price, unrealized P&L, P&L %) that recomputes live from SSE, colors P&L green/red, and displays percents with 2dp without re-multiplying by 100
+- [x] **PF-07**: User sees a portfolio heatmap (in-house squarified treemap, positioned divs) with tiles sized by live weight and colored by P&L % on a diverging green/red scale clamped at ±5%; tiny tiles hide their label behind a tooltip; with no positions it shows "No positions — buy something or ask FinAlly" (G-06)
+- [x] **PF-08**: User sees a P&L line chart (Lightweight Charts) of total value over time from `/api/portfolio/history`; it renders a single point gracefully and refetches every 30 seconds as well as after trades, chat actions and reset (G-03)
+- [x] **PF-09**: User can reset the account from the header after a `window.confirm`; `POST /api/reset` returns `{"status": "ok"}` after one transaction restores $10,000 cash and the default watchlist and deletes positions, trades, snapshots and chat messages, then re-syncs tracked tickers and records a fresh snapshot; reset shares the trade lock (G-16)
 - [ ] **PF-10**: After a reset the frontend re-fetches everything and clears the chat panel, sparklines and chart selection; the Reset button is disabled while a chat request is in flight (G-16)
 
 ### AI Chat
@@ -161,22 +161,22 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OPS-06 | Phase 1 | Complete |
 | OPS-07 | Phase 1 | Complete |
 | OPS-08 | Phase 1 | Complete |
-| TRD-01 | Phase 2 | Pending |
-| TRD-02 | Phase 2 | Pending |
-| TRD-03 | Phase 2 | Pending |
-| TRD-04 | Phase 2 | Pending |
-| TRD-05 | Phase 2 | Pending |
-| TRD-06 | Phase 2 | Pending |
-| TRD-07 | Phase 2 | Pending |
-| TRD-08 | Phase 2 | Pending |
-| TRD-09 | Phase 2 | Pending |
-| TRD-10 | Phase 2 | Pending |
+| TRD-01 | Phase 2 | Complete |
+| TRD-02 | Phase 2 | Complete |
+| TRD-03 | Phase 2 | Complete |
+| TRD-04 | Phase 2 | Complete |
+| TRD-05 | Phase 2 | Complete |
+| TRD-06 | Phase 2 | Complete |
+| TRD-07 | Phase 2 | Complete |
+| TRD-08 | Phase 2 | Complete |
+| TRD-09 | Phase 2 | Complete |
+| TRD-10 | Phase 2 | Complete |
 | WL-01 | Phase 1 | Complete |
 | WL-02 | Phase 1 | Complete |
 | WL-03 | Phase 1 | Complete |
 | WL-04 | Phase 1 | Complete |
 | WL-05 | Phase 1 | Complete |
-| WL-06 | Phase 2 | Pending |
+| WL-06 | Phase 2 | Complete |
 | MD-01 | Phase 1 | Complete |
 | MD-02 | Phase 1 | Complete |
 | MD-03 | Phase 1 | Complete |
@@ -184,16 +184,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MD-05 | Phase 1 | Complete |
 | MD-06 | Phase 1 | Complete |
 | MD-07 | Phase 1 | Complete |
-| MD-08 | Phase 2 | Gaps Found |
-| PF-01 | Phase 2 | Pending |
-| PF-02 | Phase 2 | Pending |
-| PF-03 | Phase 2 | Pending |
-| PF-04 | Phase 2 | Pending |
-| PF-05 | Phase 2 | Pending |
-| PF-06 | Phase 2 | Gaps Found |
-| PF-07 | Phase 2 | Gaps Found |
-| PF-08 | Phase 2 | Pending |
-| PF-09 | Phase 2 | Pending |
+| MD-08 | Phase 2 | Complete |
+| PF-01 | Phase 2 | Complete |
+| PF-02 | Phase 2 | Complete |
+| PF-03 | Phase 2 | Complete |
+| PF-04 | Phase 2 | Complete |
+| PF-05 | Phase 2 | Complete |
+| PF-06 | Phase 2 | Complete |
+| PF-07 | Phase 2 | Complete |
+| PF-08 | Phase 2 | Complete |
+| PF-09 | Phase 2 | Complete |
 | PF-10 | Phase 3 | Pending |
 | AI-01 | Phase 3 | Pending |
 | AI-02 | Phase 3 | Pending |
