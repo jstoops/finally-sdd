@@ -146,6 +146,22 @@ class TestTradeTracer:
         assert run_sql(db_path, "SELECT COUNT(*) FROM trades") == [(0,)]
         assert run_sql(db_path, "SELECT cash_balance FROM users_profile") == [(10000.0,)]
 
+    @pytest.mark.parametrize(
+        ("quantity", "side"),
+        [(1e24, "buy"), (10**24, "buy"), (1e30, "sell")],
+        ids=["huge-float-buy", "huge-int-buy", "huge-float-sell"],
+    )
+    def test_huge_quantity_is_400_and_changes_nothing(self, trade_client, quantity, side):
+        res = trade_client.post(
+            "/api/portfolio/trade", json={"ticker": "AAPL", "quantity": quantity, "side": side}
+        )
+        assert res.status_code == 400
+        assert res.json() == {"error": "Quantity must be at most 1,000,000,000."}
+        db_path = trade_client.app.state.db.path
+        assert run_sql(db_path, "SELECT COUNT(*) FROM trades") == [(0,)]
+        assert run_sql(db_path, "SELECT COUNT(*) FROM positions") == [(0,)]
+        assert run_sql(db_path, "SELECT cash_balance FROM users_profile") == [(10000.0,)]
+
 
 class TestTrades:
     def test_fresh_app_has_no_trades(self, trade_client):

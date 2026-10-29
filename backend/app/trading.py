@@ -33,6 +33,11 @@ logger = logging.getLogger(__name__)
 
 DUST = 1e-6  # PLAN §7: sell tolerance and the remaining-quantity cutoff for deleting a row
 MIN_ORDER_VALUE = 0.01  # a buy must cost at least one cent; sells have no minimum
+# Far above anything $10,000 can buy (1,000,000 shares at the $0.01 floor), and low enough
+# that round4(quantity) and notional(quantity, price) for any price below $10^15 stay
+# inside Decimal's default 28-digit context. Checked on the raw value, before rounding.
+MAX_QUANTITY = 1_000_000_000
+QUANTITY_TOO_LARGE = f"Quantity must be at most {MAX_QUANTITY:,}."
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,9 +94,10 @@ class TradeService:
         """Fill `quantity` shares of `raw_ticker` on `side` ("buy" or "sell").
 
         Checks run in order: ticker, side, quantity, price, then cash or shares.
-        Raises DomainError for a malformed ticker or side, a non-finite, non-positive
-        or sub-0.0001 quantity, no cached price, a buy below MIN_ORDER_VALUE,
-        insufficient cash or insufficient shares; nothing changes on failure.
+        Raises DomainError for a malformed ticker or side, a non-finite, non-positive,
+        sub-0.0001 or above-MAX_QUANTITY quantity, no cached price, a buy below
+        MIN_ORDER_VALUE, insufficient cash or insufficient shares; nothing changes on
+        failure. The quantity checks run before the lock is taken.
         """
         ticker = normalize_ticker(raw_ticker)
         side = side.strip().lower() if isinstance(side, str) else ""
@@ -114,7 +120,9 @@ class TradeService:
         """Coerce and round `quantity` half-up to 4 dp, rejecting it before any SQL runs.
 
         NaN, +/-Infinity (including 1e400, which parses as inf), zero and negatives
-        are rejected first; a positive value that rounds to 0 is rejected second.
+        are rejected first; a value above MAX_QUANTITY is rejected next, on the raw
+        value so the rounding can never overflow; a positive value that rounds to 0 is
+        rejected last. An order is never clamped to the cap.
         """
         try:
             value = float(quantity)
@@ -122,6 +130,8 @@ class TradeService:
             raise DomainError("Quantity must be a positive number.") from None
         if not math.isfinite(value) or value <= 0:
             raise DomainError("Quantity must be a positive number.")
+        if value > MAX_QUANTITY:
+            raise DomainError(QUANTITY_TOO_LARGE)
         qty = round4(value)
         if qty <= 0:
             raise DomainError("Quantity must be at least 0.0001.")

@@ -148,6 +148,22 @@ describe("TradeBar server errors", () => {
     expect(message()).toHaveClass("text-down");
   });
 
+  it("sends a 25-digit quantity as a JSON number and shows the server's 400 cap message inline", async () => {
+    const cap = "Quantity must be at most 1,000,000,000.";
+    const fetchMock = stubApi({ "POST /api/portfolio/trade": jsonResponse({ error: cap }, 400) });
+    renderBar();
+    typeOrder("AAPL", "1000000000000000000000000");
+    await clickAndSettle(buy());
+    const calls = callsTo(fetchMock, "/api/portfolio/trade", "POST");
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String((calls[0][1] as RequestInit).body));
+    expect(body).toEqual({ ticker: "AAPL", quantity: 1e24, side: "buy" });
+    expect(typeof body.quantity).toBe("number");
+    expect(message()).toHaveTextContent(cap);
+    expect(message()).toHaveAttribute("data-kind", "error");
+    expect(message()).toHaveAttribute("role", "alert");
+  });
+
   it("shows 'Invalid request' for a 422", async () => {
     stubApi({
       "POST /api/portfolio/trade": jsonResponse({ detail: [{ msg: "bad" }] }, 422),
