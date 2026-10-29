@@ -1,6 +1,6 @@
 "use client";
 
-// The full terminal grid (D-01). Later phases fill the dimmed slots instead of re-flowing.
+// The full terminal grid (D-01). Every panel is live; Phase 3 put the AI chat in its slot.
 //
 //   xl+:   header across the top; watchlist | center (chart / heatmap+P&L / positions+trade) | chat
 //   md-xl: watchlist | center, with chat moved under the center column; the page scrolls
@@ -8,6 +8,7 @@ import { useEffect } from "react";
 
 import type { Position } from "@/api/types";
 import { ChartPanel } from "@/components/ChartPanel";
+import { ChatPanel } from "@/components/ChatPanel";
 import { Header } from "@/components/Header";
 import { Heatmap } from "@/components/Heatmap";
 import { PnlChart } from "@/components/PnlChart";
@@ -17,30 +18,6 @@ import { Watchlist } from "@/components/Watchlist";
 import { usePortfolio } from "@/store/portfolio";
 import { startPriceStream, usePrices } from "@/store/prices";
 import { useWatchlist } from "@/store/watchlist";
-
-function ComingSoon({
-  testId,
-  title,
-  label,
-  className = "",
-}: {
-  testId: string;
-  title: string;
-  label: string;
-  className?: string;
-}) {
-  return (
-    <section
-      data-testid={testId}
-      className={`flex min-h-0 flex-col border border-border bg-panel/60 text-muted ${className}`}
-    >
-      <h2 className="border-b border-border px-2 py-1 text-xs font-semibold uppercase tracking-wide">
-        {title}
-      </h2>
-      <div className="flex flex-1 items-center justify-center p-3 text-center text-xs">{label}</div>
-    </section>
-  );
-}
 
 export function Terminal() {
   useEffect(() => {
@@ -96,12 +73,7 @@ export function Terminal() {
             <TradePanel />
           </div>
         </div>
-        <ComingSoon
-          testId="panel-chat"
-          title="AI Chat"
-          label="AI Chat — coming in Phase 3"
-          className="min-h-64 md:col-start-2 xl:col-start-3 xl:row-start-1 xl:min-h-0"
-        />
+        <ChatPanel className="min-h-64 md:col-start-2 xl:col-start-3 xl:row-start-1 xl:min-h-0" />
       </main>
     </div>
   );

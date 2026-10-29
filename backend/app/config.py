@@ -47,6 +47,8 @@ class Settings:
     db_path: str
     static_dir: str
     dev_cors_origin: str | None = None
+    # LLM_MOCK=true (any letter case): deterministic mock chat replies (PLAN §9)
+    llm_mock: bool = False
 
     @classmethod
     def from_env(cls, env_file: Path | None = None) -> Settings:
@@ -63,6 +65,7 @@ class Settings:
             db_path=_env("DB_PATH") or str(DEFAULT_DB_PATH),
             static_dir=_env("STATIC_DIR") or str(DEFAULT_STATIC_DIR),
             dev_cors_origin=_env("DEV_CORS_ORIGIN"),
+            llm_mock=(_env("LLM_MOCK") or "").lower() == "true",
         )
 
 
