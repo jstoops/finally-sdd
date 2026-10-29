@@ -3,6 +3,12 @@
 Every value goes through `Decimal(str(x))`, so a float such as 2.675 is treated as the
 decimal it prints as. Never use the builtin `round` on money: it rounds half-to-even on
 binary floats (round(2.675, 2) == 2.67, round(0.125, 2) == 0.12).
+
+Precision range: the default Decimal context has 28 significant digits, so `quantize`
+raises decimal.InvalidOperation once a value needs more (about 1e24 at 4 dp, about 1e26
+at cents). These helpers do not range-check; callers bound their inputs. TradeService
+caps every quantity at MAX_QUANTITY before any helper runs, and stored positions and
+cached prices are already in range.
 """
 
 from __future__ import annotations

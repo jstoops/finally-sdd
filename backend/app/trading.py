@@ -19,6 +19,7 @@ import logging
 import math
 import uuid
 from dataclasses import dataclass
+from decimal import InvalidOperation
 
 from .db import DEFAULT_USER_ID, Database, now_iso
 from .errors import DomainError
@@ -33,6 +34,11 @@ logger = logging.getLogger(__name__)
 
 DUST = 1e-6  # PLAN §7: sell tolerance and the remaining-quantity cutoff for deleting a row
 MIN_ORDER_VALUE = 0.01  # a buy must cost at least one cent; sells have no minimum
+# Far above anything $10,000 can buy (1,000,000 shares at the $0.01 floor), and low enough
+# that round4(quantity) and notional(quantity, price) for any price below $10^15 stay
+# inside Decimal's default 28-digit context. Checked on the raw value, before rounding.
+MAX_QUANTITY = 1_000_000_000
+QUANTITY_TOO_LARGE = f"Quantity must be at most {MAX_QUANTITY:,}."
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,9 +95,10 @@ class TradeService:
         """Fill `quantity` shares of `raw_ticker` on `side` ("buy" or "sell").
 
         Checks run in order: ticker, side, quantity, price, then cash or shares.
-        Raises DomainError for a malformed ticker or side, a non-finite, non-positive
-        or sub-0.0001 quantity, no cached price, a buy below MIN_ORDER_VALUE,
-        insufficient cash or insufficient shares; nothing changes on failure.
+        Raises DomainError for a malformed ticker or side, a non-finite, non-positive,
+        sub-0.0001 or above-MAX_QUANTITY quantity, no cached price, a buy below
+        MIN_ORDER_VALUE, insufficient cash or insufficient shares; nothing changes on
+        failure. The quantity checks run before the lock is taken.
         """
         ticker = normalize_ticker(raw_ticker)
         side = side.strip().lower() if isinstance(side, str) else ""
@@ -113,16 +120,33 @@ class TradeService:
     def _valid_quantity(quantity: float) -> float:
         """Coerce and round `quantity` half-up to 4 dp, rejecting it before any SQL runs.
 
-        NaN, +/-Infinity (including 1e400, which parses as inf), zero and negatives
-        are rejected first; a positive value that rounds to 0 is rejected second.
+        Checks, in order: type (only int or float, never bool, so a direct caller such
+        as the Phase 3 executor cannot fill 1 share from True or 10 from "10"); float
+        conversion (an int beyond float range is "not a positive number"); finite and
+        positive (NaN, +/-Infinity including 1e400, zero and negatives); the
+        MAX_QUANTITY cap, on the raw value so the rounding can never overflow; round4,
+        whose decimal.InvalidOperation is reported as the cap; and the 0.0001 minimum
+        for a value that rounds to 0. An order is never clamped to the cap. Every
+        rejection is a DomainError.
         """
+        # bool is a subclass of int, so it must be excluded explicitly
+        if isinstance(quantity, bool) or not isinstance(quantity, (int, float)):
+            raise DomainError("Quantity must be a positive number.")
         try:
             value = float(quantity)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # OverflowError: a Python int beyond float range (e.g. 10**400), like 1e400 -> inf
             raise DomainError("Quantity must be a positive number.") from None
         if not math.isfinite(value) or value <= 0:
             raise DomainError("Quantity must be a positive number.")
-        qty = round4(value)
+        if value > MAX_QUANTITY:
+            raise DomainError(QUANTITY_TOO_LARGE)
+        try:
+            qty = round4(value)
+        except InvalidOperation:
+            # Backstop in case MAX_QUANTITY is ever raised past Decimal's 28-digit range;
+            # the cap above is the real guard.
+            raise DomainError(QUANTITY_TOO_LARGE) from None
         if qty <= 0:
             raise DomainError("Quantity must be at least 0.0001.")
         return qty

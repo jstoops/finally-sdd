@@ -192,15 +192,57 @@ class TestTracked:
 
 
 POSITIVE = "Quantity must be a positive number."
+TOO_LARGE = "Quantity must be at most 1,000,000,000."
 
 
 class TestValidation:
+    @pytest.mark.parametrize(
+        "quantity",
+        [1e24, 1e30, 9e23, math.nextafter(1e9, math.inf), 1_000_000_001],
+        ids=["1e24", "1e30", "9e23", "next-above-max", "max-plus-one"],
+    )
+    async def test_above_max_quantity_is_rejected(self, trade_env, quantity):
+        trade_env.price("AAPL", 190.0)
+        assert await rejected(trade_env, "AAPL", quantity, "buy") == TOO_LARGE
+        assert await rejected(trade_env, "AAPL", quantity, "sell") == TOO_LARGE
+
+    @pytest.mark.parametrize("quantity", [1_000_000_000, 1e9], ids=["int", "float"])
+    async def test_at_max_quantity_reaches_the_cash_and_share_rules(self, trade_env, quantity):
+        trade_env.price("AAPL", 190.0)
+        assert await rejected(trade_env, "AAPL", quantity, "buy") == (
+            "Insufficient cash (need $190,000,000,000.00, have $10,000.00)."
+        )
+        assert await rejected(trade_env, "AAPL", quantity, "sell") == (
+            "Insufficient shares (need 1000000000, have 0)."
+        )
+
+    async def test_int_overflow_is_a_domain_error(self, trade_env):
+        trade_env.price("AAPL", 190.0)
+        assert await rejected(trade_env, "AAPL", 10**400, "buy") == POSITIVE
+
+    async def test_decimal_overflow_is_a_domain_error(self, trade_env, monkeypatch):
+        # Backstop: with the cap lifted, round4's InvalidOperation still becomes a DomainError
+        monkeypatch.setattr(trading, "MAX_QUANTITY", math.inf)
+        trade_env.price("AAPL", 190.0)
+        assert await rejected(trade_env, "AAPL", 1e24, "buy") == TOO_LARGE
+
     @pytest.mark.parametrize(
         "quantity",
         [math.nan, math.inf, -math.inf, float("1e400"), 0, 0.0, -1, -0.5],
         ids=["nan", "inf", "-inf", "1e400", "zero", "zero-float", "minus-one", "minus-half"],
     )
     async def test_non_finite_or_non_positive_quantity(self, trade_env, quantity):
+        trade_env.price("AAPL", 190.0)
+        assert await rejected(trade_env, "AAPL", quantity, "buy") == POSITIVE
+        assert await rejected(trade_env, "AAPL", quantity, "sell") == POSITIVE
+
+    @pytest.mark.parametrize(
+        "quantity",
+        [True, False, "10", None],
+        ids=["true", "false", "numeric-string", "none"],
+    )
+    async def test_wrong_typed_quantity_is_rejected(self, trade_env, quantity):
+        # The Phase 3 executor calls execute directly, without the strict request model
         trade_env.price("AAPL", 190.0)
         assert await rejected(trade_env, "AAPL", quantity, "buy") == POSITIVE
         assert await rejected(trade_env, "AAPL", quantity, "sell") == POSITIVE
@@ -394,6 +436,9 @@ class TestAtomicity:
             ("AAPL", 0.00004, "buy"),
             ("AAPL", 0.00001, "sell"),
             ("PYPL", 0.0001, "buy"),  # order value below one cent
+            ("AAPL", 1e24, "buy"),  # above MAX_QUANTITY
+            ("AAPL", 1e30, "sell"),
+            ("AAPL", True, "buy"),  # a boolean is not a quantity
         ]
         for ticker, quantity, side in cases:
             await rejected(env, ticker, quantity, side)
@@ -427,3 +472,28 @@ class TestConcurrency:
         assert len(run_sql(env.db.path, "SELECT id FROM trades")) == 16
         assert len(snapshots(env.db.path)) == 16
         assert position(env.db.path, "AAPL")[0] == 16.0
+
+    async def test_oversized_quantity_is_rejected_without_taking_the_lock(self, trade_env):
+        env = trade_env
+        env.price("AAPL", 190.0)
+        async with env.lock:
+            # A TimeoutError here would mean the quantity gate moved inside the lock
+            with pytest.raises(DomainError) as exc_info:
+                await asyncio.wait_for(env.trades.execute("AAPL", 1e24, "buy"), timeout=1)
+        assert exc_info.value.message == TOO_LARGE
+
+    async def test_oversized_orders_in_parallel_leave_valid_fills_exact(self, trade_env):
+        env = trade_env
+        env.price("AAPL", 100.0)
+        calls = []
+        for _ in range(5):
+            calls.append(env.trades.execute("AAPL", 1, "buy"))
+            calls.append(env.trades.execute("AAPL", 1e24, "buy"))
+        results = await bounded(asyncio.gather(*calls, return_exceptions=True))
+        fills = [r for r in results if isinstance(r, TradeResult)]
+        errors = [r for r in results if isinstance(r, DomainError)]
+        assert len(fills) == 5 and len(errors) == 5
+        assert all(e.message == TOO_LARGE for e in errors)
+        assert cash(env.db.path) == 9500.0
+        assert len(run_sql(env.db.path, "SELECT id FROM trades")) == 5
+        assert position(env.db.path, "AAPL")[0] == 5.0

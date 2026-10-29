@@ -3,6 +3,7 @@
 import pytest
 
 from app.money import format_money, format_qty, notional, position_pnl, round4, to_cents
+from app.trading import MAX_QUANTITY
 
 
 class TestToCents:
@@ -21,6 +22,12 @@ class TestRound4:
     )
     def test_rounds_half_up_to_four_places(self, value, expected):
         assert round4(value) == expected
+
+    def test_max_quantity_stays_in_decimal_range(self):
+        assert round4(MAX_QUANTITY) == 1e9
+        assert notional(MAX_QUANTITY, 1_000_000.0) == 1e15
+        assert format_qty(MAX_QUANTITY) == "1000000000"
+        assert format_money(notional(MAX_QUANTITY, 190.0)) == "$190,000,000,000.00"
 
 
 class TestNotional:

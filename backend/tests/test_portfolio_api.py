@@ -113,6 +113,21 @@ class TestTradeTracer:
     def test_malformed_body_is_422(self, trade_client, body):
         assert trade_client.post("/api/portfolio/trade", json=body).status_code == 422
 
+    @pytest.mark.parametrize(
+        "quantity",
+        [True, False, "10", "1e24"],
+        ids=["true", "false", "numeric-string", "exponent-string"],
+    )
+    def test_wrong_typed_quantity_is_422_and_changes_nothing(self, trade_client, quantity):
+        res = trade_client.post(
+            "/api/portfolio/trade", json={"ticker": "AAPL", "quantity": quantity, "side": "buy"}
+        )
+        assert res.status_code == 422
+        db_path = trade_client.app.state.db.path
+        assert run_sql(db_path, "SELECT COUNT(*) FROM trades") == [(0,)]
+        assert run_sql(db_path, "SELECT COUNT(*) FROM positions") == [(0,)]
+        assert run_sql(db_path, "SELECT cash_balance FROM users_profile") == [(10000.0,)]
+
     def test_unpriced_ticker_is_400_with_verbatim_message(self, trade_client):
         res = trade_client.post(
             "/api/portfolio/trade", json={"ticker": "ZZZZ", "quantity": 1, "side": "buy"}
@@ -144,6 +159,22 @@ class TestTradeTracer:
 
         db_path = trade_client.app.state.db.path
         assert run_sql(db_path, "SELECT COUNT(*) FROM trades") == [(0,)]
+        assert run_sql(db_path, "SELECT cash_balance FROM users_profile") == [(10000.0,)]
+
+    @pytest.mark.parametrize(
+        ("quantity", "side"),
+        [(1e24, "buy"), (10**24, "buy"), (1e30, "sell")],
+        ids=["huge-float-buy", "huge-int-buy", "huge-float-sell"],
+    )
+    def test_huge_quantity_is_400_and_changes_nothing(self, trade_client, quantity, side):
+        res = trade_client.post(
+            "/api/portfolio/trade", json={"ticker": "AAPL", "quantity": quantity, "side": side}
+        )
+        assert res.status_code == 400
+        assert res.json() == {"error": "Quantity must be at most 1,000,000,000."}
+        db_path = trade_client.app.state.db.path
+        assert run_sql(db_path, "SELECT COUNT(*) FROM trades") == [(0,)]
+        assert run_sql(db_path, "SELECT COUNT(*) FROM positions") == [(0,)]
         assert run_sql(db_path, "SELECT cash_balance FROM users_profile") == [(10000.0,)]
 
 
