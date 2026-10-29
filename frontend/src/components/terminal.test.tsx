@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  ChatMessage,
   Portfolio,
   Position,
   PriceFrame,
@@ -16,6 +17,7 @@ import type {
 import Home from "@/app/page";
 import { ConnectionDot } from "@/components/Header";
 import { Terminal } from "@/components/Terminal";
+import { useChat } from "@/store/chat";
 import { usePortfolio } from "@/store/portfolio";
 import { SPARK_MAX, usePrices } from "@/store/prices";
 import { useWatchlist } from "@/store/watchlist";
@@ -134,6 +136,27 @@ async function renderTerminal(entries: WatchlistEntry[] = ENTRIES, routes: Route
   return fetchMock;
 }
 
+/** The endpoints a chat reply with actions must refetch (AI-15). */
+const REFETCH_PATHS = [
+  "/api/portfolio",
+  "/api/trades",
+  "/api/portfolio/history",
+  "/api/watchlist",
+] as const;
+
+function refetchCounts(fetchMock: ReturnType<typeof stubApi>): Record<string, number> {
+  return Object.fromEntries(REFETCH_PATHS.map((path) => [path, callsTo(fetchMock, path).length]));
+}
+
+/** Type `text` into the chat box and press Send, letting the reply and refetches settle. */
+async function sendChat(text: string) {
+  fireEvent.change(screen.getByTestId("chat-input"), { target: { value: text } });
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("chat-send"));
+  });
+  await act(async () => {});
+}
+
 beforeEach(() => {
   usePrices.setState({ ticks: {}, lastTs: {}, spark: {}, status: "connecting" });
   useWatchlist.setState({
@@ -151,6 +174,7 @@ beforeEach(() => {
     snapshots: [],
     historyLoaded: false,
   });
+  useChat.setState({ entries: [], pending: false });
 });
 
 afterEach(() => {
@@ -533,7 +557,7 @@ describe("selection", () => {
 });
 
 describe("Terminal", () => {
-  it("renders every D-01 panel, with coming-soon labels only where still unbuilt", async () => {
+  it("renders every D-01 panel, with no coming-soon labels left", async () => {
     await renderTerminal();
     for (const id of [
       "panel-watchlist",
@@ -554,14 +578,16 @@ describe("Terminal", () => {
     );
     expect(screen.getByTestId("panel-pnl")).not.toHaveTextContent("P&L — coming in Phase 2");
     expect(screen.getByTestId("pnl-chart")).toBeInTheDocument();
-    expect(screen.queryAllByText(/coming in Phase/)).toHaveLength(1);
+    expect(screen.queryAllByText(/coming in Phase/)).toHaveLength(0);
     expect(screen.getByTestId("panel-positions")).not.toHaveTextContent(
       "Positions — coming in Phase 2",
     );
     expect(screen.getByTestId("positions-table")).toBeInTheDocument();
     expect(screen.getByTestId("positions-empty")).toHaveTextContent("No positions yet");
     expect(screen.getByTestId("panel-trade")).toBeInTheDocument();
-    expect(screen.getByTestId("panel-chat")).toHaveTextContent("AI Chat — coming in Phase 3");
+    expect(
+      within(screen.getByTestId("panel-chat")).getByTestId("chat-input"),
+    ).toBeInTheDocument();
   });
 
   it("opens one stream and loads the watchlist and the portfolio once", async () => {
@@ -746,5 +772,111 @@ describe("Terminal", () => {
     expect(message).toHaveClass("text-down");
     // The rejected trade leaves the loaded portfolio untouched.
     expect(usePortfolio.getState().cash).toBe(10000);
+  });
+  it("sends a chat message and refetches after actions", async () => {
+    const reply: ChatMessage = {
+      id: "m-2",
+      role: "assistant",
+      content: "Buying 1 share of AAPL.",
+      actions: {
+        trades: [{ ticker: "AAPL", side: "buy", quantity: 1, status: "executed", price: 190.52 }],
+        watchlist_changes: [],
+      },
+      created_at: "2026-10-09T14:03:22Z",
+    };
+    const fetchMock = await renderTerminal(ENTRIES, { "POST /api/chat": reply });
+    const before = refetchCounts(fetchMock);
+
+    await sendChat("buy");
+
+    const chatCalls = callsTo(fetchMock, "/api/chat", "POST");
+    expect(chatCalls).toHaveLength(1);
+    const [, init] = chatCalls[0];
+    expect(JSON.parse(String((init as RequestInit | undefined)?.body))).toEqual({
+      message: "buy",
+    });
+    const assistant = screen
+      .getAllByTestId("chat-message")
+      .find((el) => el.getAttribute("data-role") === "assistant");
+    expect(assistant).toHaveTextContent("Buying 1 share of AAPL.");
+    const chip = screen.getByTestId("chat-action");
+    expect(chip).toHaveAttribute("data-status", "executed");
+    expect(chip).toHaveAttribute("data-kind", "trade");
+    expect(chip).toHaveTextContent("BUY 1 AAPL @ $190.52");
+    expect(screen.getByTestId("chat-input")).toHaveValue("");
+    const after = refetchCounts(fetchMock);
+    for (const path of REFETCH_PATHS) {
+      expect(after[path]).toBeGreaterThan(before[path]);
+    }
+  });
+
+  it("a reply without actions triggers no refetch", async () => {
+    const reply: ChatMessage = {
+      id: "m-2",
+      role: "assistant",
+      content: "Hello! I'm FinAlly, your AI trading assistant. How can I help?",
+      actions: null,
+      created_at: "2026-10-09T14:03:22Z",
+    };
+    const fetchMock = await renderTerminal(ENTRIES, { "POST /api/chat": reply });
+    const before = refetchCounts(fetchMock);
+
+    await sendChat("hello");
+
+    expect(screen.getAllByTestId("chat-message")).toHaveLength(2);
+    expect(screen.queryByTestId("chat-action")).not.toBeInTheDocument();
+    expect(refetchCounts(fetchMock)).toEqual(before);
+  });
+
+  it("renders a failed action distinctly and assistant text literally", async () => {
+    const reply: ChatMessage = {
+      id: "m-2",
+      role: "assistant",
+      content: "Selling <b>x</b>",
+      actions: {
+        trades: [
+          {
+            ticker: "AAPL",
+            side: "sell",
+            quantity: 1,
+            status: "failed",
+            error: "Insufficient shares (need 1, have 0).",
+          },
+        ],
+        watchlist_changes: [],
+      },
+      created_at: "2026-10-09T14:03:22Z",
+    };
+    await renderTerminal(ENTRIES, { "POST /api/chat": reply });
+
+    await sendChat("sell");
+
+    const assistant = screen
+      .getAllByTestId("chat-message")
+      .find((el) => el.getAttribute("data-role") === "assistant");
+    expect(assistant).toHaveTextContent("Selling <b>x</b>");
+    expect(assistant?.querySelector("b")).toBeNull();
+    const chip = screen.getByTestId("chat-action");
+    expect(chip).toHaveAttribute("data-status", "failed");
+    expect(chip).toHaveClass("text-down");
+    expect(chip).toHaveTextContent("Insufficient shares (need 1, have 0).");
+  });
+
+  it("shows the server's chat error as an alert", async () => {
+    await renderTerminal(ENTRIES, {
+      "POST /api/chat": () =>
+        jsonResponse(
+          { error: "AI assistant is not configured. Set OPENROUTER_API_KEY in .env." },
+          503,
+        ),
+    });
+
+    await sendChat("buy");
+
+    const error = screen.getByTestId("chat-system");
+    expect(error).toHaveAttribute("data-tone", "error");
+    expect(error).toHaveAttribute("role", "alert");
+    expect(error).toHaveTextContent("AI assistant is not configured.");
+    expect(screen.getByTestId("chat-send")).not.toBeDisabled();
   });
 });
