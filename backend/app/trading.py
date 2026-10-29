@@ -120,13 +120,18 @@ class TradeService:
     def _valid_quantity(quantity: float) -> float:
         """Coerce and round `quantity` half-up to 4 dp, rejecting it before any SQL runs.
 
-        Checks, in order: float conversion (a value float() rejects, or an int beyond
-        float range, is "not a positive number"); finite and positive (NaN, +/-Infinity
-        including 1e400, zero and negatives); the MAX_QUANTITY cap, on the raw value so
-        the rounding can never overflow; round4, whose decimal.InvalidOperation is
-        reported as the cap; and the 0.0001 minimum for a value that rounds to 0. An
-        order is never clamped to the cap. Every rejection is a DomainError.
+        Checks, in order: type (only int or float, never bool, so a direct caller such
+        as the Phase 3 executor cannot fill 1 share from True or 10 from "10"); float
+        conversion (an int beyond float range is "not a positive number"); finite and
+        positive (NaN, +/-Infinity including 1e400, zero and negatives); the
+        MAX_QUANTITY cap, on the raw value so the rounding can never overflow; round4,
+        whose decimal.InvalidOperation is reported as the cap; and the 0.0001 minimum
+        for a value that rounds to 0. An order is never clamped to the cap. Every
+        rejection is a DomainError.
         """
+        # bool is a subclass of int, so it must be excluded explicitly
+        if isinstance(quantity, bool) or not isinstance(quantity, (int, float)):
+            raise DomainError("Quantity must be a positive number.")
         try:
             value = float(quantity)
         except (TypeError, ValueError, OverflowError):

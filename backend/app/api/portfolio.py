@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictFloat
 
 from ..portfolio import PortfolioService
 from ..trading import TradeService
@@ -13,10 +13,15 @@ class TradeRequest(BaseModel):
     """POST body. No Literal or pattern here: a bad side or ticker must be a 400, not a 422.
 
     There is deliberately no price field: the fill price always comes from the cache.
+
+    `quantity` is strict: only a JSON number parses (integers included). A boolean, a
+    string or null is a malformed body and gets FastAPI's 422 (PLAN §8), so JSON true
+    can never buy 1 share and "10" can never buy 10. NaN, Infinity, 1e400 and huge
+    numbers still parse, and the service rejects them with a 400.
     """
 
     ticker: str
-    quantity: float
+    quantity: StrictFloat
     side: str
 
 
