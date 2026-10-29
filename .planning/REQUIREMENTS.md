@@ -71,21 +71,21 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 
 ### AI Chat
 
-- [ ] **AI-01**: `POST /api/chat` calls `openrouter/openai/gpt-oss-120b` via LiteLLM → OpenRouter with Cerebras as the provider (per the `cerebras-inference` skill), requesting structured output `{message, trades?, watchlist_changes?}`, and returns the stored assistant message (PLAN §8)
+- [x] **AI-01**: `POST /api/chat` calls `openrouter/openai/gpt-oss-120b` via LiteLLM → OpenRouter with Cerebras as the provider (per the `cerebras-inference` skill), requesting structured output `{message, trades?, watchlist_changes?}`, and returns the stored assistant message (PLAN §8)
 - [ ] **AI-02**: Each prompt contains the FinAlly system prompt, a portfolio context (cash, positions with P&L, watchlist with live prices and Chg %, total value) built from the same service as `GET /api/portfolio`, and the last 20 messages
 - [ ] **AI-03**: The system prompt instructs the model to analyze concentration and P&L, suggest trades with reasoning, execute when asked, manage the watchlist, be concise, convert dollar amounts to share quantities (4dp) using the price in context, use the exact held quantity for "sell all", and reply in plain text without markdown tables (G-17)
 - [ ] **AI-04**: The response envelope is validated strictly (`message` required); each trade and watchlist item is validated individually, so a malformed item is recorded as `failed` without failing the response; unparseable output or an LLM call failure returns `502 {"error": ...}` with the user message still stored (G-11)
-- [ ] **AI-05**: Actions auto-execute without confirmation: watchlist changes first, then trades, each independently and in order, through the same trade and watchlist services as the REST routes; each outcome (`executed` with price for trades, or `failed` with `error`) is stored in `actions`; `actions` is `null` when nothing was requested
+- [x] **AI-05**: Actions auto-execute without confirmation: watchlist changes first, then trades, each independently and in order, through the same trade and watchlist services as the REST routes; each outcome (`executed` with price for trades, or `failed` with `error`) is stored in `actions`; `actions` is `null` when nothing was requested
 - [ ] **AI-06**: An AI add of an already-watched ticker is `executed`; an AI remove of an unwatched ticker is `failed` with "{TICKER} is not on your watchlist" (G-20)
 - [ ] **AI-07**: At most 10 trades and 10 watchlist changes run per reply; extra actions are recorded as `failed` with "too many actions" (G-21)
 - [ ] **AI-08**: For each failed action the backend appends a templated ⚠️ note to the message (e.g. "⚠️ Couldn't buy 50 TSLA: insufficient cash (need $12,450.00, have $8,095.00)."); no second LLM call; the stored content includes the notes
 - [ ] **AI-09**: Without `OPENROUTER_API_KEY` (and `LLM_MOCK` not `true`) the app still starts and `POST /api/chat` returns `503` with the PLAN §5 message, storing nothing; an empty/whitespace message or one over 2,000 characters returns `400` (G-15)
-- [ ] **AI-10**: With `LLM_MOCK=true`, deterministic mock responses (buy / sell / add X / remove X / greeting, first rule wins) match case-insensitively on word boundaries, uppercase the captured ticker, and flow through the same execution, failure-note and storage path (G-14)
+- [x] **AI-10**: With `LLM_MOCK=true`, deterministic mock responses (buy / sell / add X / remove X / greeting, first rule wins) match case-insensitively on word boundaries, uppercase the captured ticker, and flow through the same execution, failure-note and storage path (G-14)
 - [ ] **AI-11**: `GET /api/chat/history` returns the last 50 messages oldest first, and the chat panel loads it on page load, rendering stored actions exactly as live ones
 - [ ] **AI-12**: User can type in a collapsible chat panel, send with Enter, and see a loading indicator; sending is disabled while a request is in flight; the view auto-scrolls to the newest message; text renders with preserved whitespace
-- [ ] **AI-13**: User sees each executed action as an inline confirmation chip (side, quantity, ticker, fill price) and each failed action as a visibly distinct chip with its error
+- [x] **AI-13**: User sees each executed action as an inline confirmation chip (side, quantity, ticker, fill price) and each failed action as a visibly distinct chip with its error
 - [ ] **AI-14**: User sees `502`/`503`/`400` chat errors as a distinct system bubble in the chat panel
-- [ ] **AI-15**: After a chat reply with non-null `actions`, the frontend re-fetches `/api/portfolio`, `/api/watchlist` and `/api/portfolio/history`, so the heatmap, positions, cash and watchlist reflect the AI's actions within about a second
+- [x] **AI-15**: After a chat reply with non-null `actions`, the frontend re-fetches `/api/portfolio`, `/api/watchlist` and `/api/portfolio/history`, so the heatmap, positions, cash and watchlist reflect the AI's actions within about a second
 - [ ] **AI-16** *(extra)*: An empty chat panel shows clickable prompt chips (e.g. "Analyze my portfolio", "Buy 5 NVDA") that send that message
 
 ### Visual Design
@@ -195,21 +195,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PF-08 | Phase 2 | Complete |
 | PF-09 | Phase 2 | Complete |
 | PF-10 | Phase 3 | Pending |
-| AI-01 | Phase 3 | Pending |
+| AI-01 | Phase 3 | Complete |
 | AI-02 | Phase 3 | Pending |
 | AI-03 | Phase 3 | Pending |
 | AI-04 | Phase 3 | Pending |
-| AI-05 | Phase 3 | Pending |
+| AI-05 | Phase 3 | Complete |
 | AI-06 | Phase 3 | Pending |
 | AI-07 | Phase 3 | Pending |
 | AI-08 | Phase 3 | Pending |
 | AI-09 | Phase 3 | Pending |
-| AI-10 | Phase 3 | Pending |
+| AI-10 | Phase 3 | Complete |
 | AI-11 | Phase 3 | Pending |
 | AI-12 | Phase 3 | Pending |
-| AI-13 | Phase 3 | Pending |
+| AI-13 | Phase 3 | Complete |
 | AI-14 | Phase 3 | Pending |
-| AI-15 | Phase 3 | Pending |
+| AI-15 | Phase 3 | Complete |
 | AI-16 | Phase 3 | Pending |
 | UX-01 | Phase 1 | Complete |
 | UX-02 | Phase 3 | Pending |

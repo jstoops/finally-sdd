@@ -101,11 +101,11 @@ Plans:
   4. Reloading the page restores the last 50 chat messages with their action chips exactly as they first appeared; Reset (disabled while a chat request is in flight) clears the chat panel, sparklines and chart selection and refetches every panel.
   5. On a wide screen the header, watchlist, main chart, heatmap, P&L chart, positions table, trade bar and collapsible chat panel are all visible at once and stay usable on a tablet; the backend pytest, frontend unit and Playwright suites pass, with E2E run from `test/docker-compose.test.yml` under `LLM_MOCK=true`, resetting before each test and covering all seven PLAN §12 scenarios.
 
-**Plans**: 5 plans
+**Plans**: 1/5 plans executed
 
 Plans:
 **Wave 1**
-- [ ] 03-01-PLAN.md — Tracer: "buy" in the chat panel → POST /api/chat → ChatService (mock LLM → parse → TradeService) → stored reply → chip and panel refetch
+- [x] 03-01-PLAN.md — Tracer: "buy" in the chat panel → POST /api/chat → ChatService (mock LLM → parse → TradeService) → stored reply → chip and panel refetch
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 03-02-PLAN.md — Every chat rule: lenient parse, per-item validation, 10 + 10 caps, G-20, ⚠️ failure notes, 400/502, FinAlly prompt with live context and 20-message history, GET /api/chat/history
@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Live Market Terminal | 7/7 | Complete    | 2026-10-27 |
 | 2. Trading and Live Portfolio | 7/7 | Complete    | 2026-10-28 |
-| 3. AI Copilot and Complete Terminal | 0/5 | Not started | - |
+| 3. AI Copilot and Complete Terminal | 1/5 | In Progress | - |
 
 ## Backlog
 
