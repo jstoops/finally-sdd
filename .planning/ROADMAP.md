@@ -66,7 +66,7 @@ Plans:
   4. The P&L chart plots total portfolio value from snapshots recorded at startup, every 30 seconds and after each trade; it renders sensibly with a single point and refreshes every 30 seconds and after each trade.
   5. A held ticker removed from the watchlist keeps streaming and keeps its live P&L, and selling an unwatched ticker to zero stops pricing it; after confirming Reset in the header, the user sees $10,000 cash, no positions or trades, a fresh P&L starting point, and the default watchlist.
 
-**Plans**: 6/6 plans executed
+**Plans**: 6/7 plans executed
 
 Plans:
 **Wave 1**
@@ -82,6 +82,9 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 02-06-PLAN.md — P&L BaselineSeries chart from snapshot history, and confirmed one-transaction Reset (PLAN §8 contract) with tracked-ticker re-sync
+
+**Wave 5** *(gap closure; blocked on Wave 4 completion)*
+- [ ] 02-07-PLAN.md — Gap closure: MAX_QUANTITY cap and DomainError backstops so a huge quantity is a 400, not a 500 (CR-01); StrictFloat trade quantity so true or "10" is a 422 (WR-03)
 
 **UI hint**: yes
 
