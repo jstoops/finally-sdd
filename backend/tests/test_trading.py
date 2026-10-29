@@ -236,6 +236,17 @@ class TestValidation:
         assert await rejected(trade_env, "AAPL", quantity, "buy") == POSITIVE
         assert await rejected(trade_env, "AAPL", quantity, "sell") == POSITIVE
 
+    @pytest.mark.parametrize(
+        "quantity",
+        [True, False, "10", None],
+        ids=["true", "false", "numeric-string", "none"],
+    )
+    async def test_wrong_typed_quantity_is_rejected(self, trade_env, quantity):
+        # The Phase 3 executor calls execute directly, without the strict request model
+        trade_env.price("AAPL", 190.0)
+        assert await rejected(trade_env, "AAPL", quantity, "buy") == POSITIVE
+        assert await rejected(trade_env, "AAPL", quantity, "sell") == POSITIVE
+
     async def test_quantity_rounding_to_zero(self, trade_env):
         trade_env.price("AAPL", 190.0)
         message = await rejected(trade_env, "AAPL", 0.00004, "buy")
@@ -427,6 +438,7 @@ class TestAtomicity:
             ("PYPL", 0.0001, "buy"),  # order value below one cent
             ("AAPL", 1e24, "buy"),  # above MAX_QUANTITY
             ("AAPL", 1e30, "sell"),
+            ("AAPL", True, "buy"),  # a boolean is not a quantity
         ]
         for ticker, quantity, side in cases:
             await rejected(env, ticker, quantity, side)
