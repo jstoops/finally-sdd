@@ -19,6 +19,7 @@ import logging
 import math
 import uuid
 from dataclasses import dataclass
+from decimal import InvalidOperation
 
 from .db import DEFAULT_USER_ID, Database, now_iso
 from .errors import DomainError
@@ -119,20 +120,28 @@ class TradeService:
     def _valid_quantity(quantity: float) -> float:
         """Coerce and round `quantity` half-up to 4 dp, rejecting it before any SQL runs.
 
-        NaN, +/-Infinity (including 1e400, which parses as inf), zero and negatives
-        are rejected first; a value above MAX_QUANTITY is rejected next, on the raw
-        value so the rounding can never overflow; a positive value that rounds to 0 is
-        rejected last. An order is never clamped to the cap.
+        Checks, in order: float conversion (a value float() rejects, or an int beyond
+        float range, is "not a positive number"); finite and positive (NaN, +/-Infinity
+        including 1e400, zero and negatives); the MAX_QUANTITY cap, on the raw value so
+        the rounding can never overflow; round4, whose decimal.InvalidOperation is
+        reported as the cap; and the 0.0001 minimum for a value that rounds to 0. An
+        order is never clamped to the cap. Every rejection is a DomainError.
         """
         try:
             value = float(quantity)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # OverflowError: a Python int beyond float range (e.g. 10**400), like 1e400 -> inf
             raise DomainError("Quantity must be a positive number.") from None
         if not math.isfinite(value) or value <= 0:
             raise DomainError("Quantity must be a positive number.")
         if value > MAX_QUANTITY:
             raise DomainError(QUANTITY_TOO_LARGE)
-        qty = round4(value)
+        try:
+            qty = round4(value)
+        except InvalidOperation:
+            # Backstop in case MAX_QUANTITY is ever raised past Decimal's 28-digit range;
+            # the cap above is the real guard.
+            raise DomainError(QUANTITY_TOO_LARGE) from None
         if qty <= 0:
             raise DomainError("Quantity must be at least 0.0001.")
         return qty
