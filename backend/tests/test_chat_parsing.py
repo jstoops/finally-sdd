@@ -35,6 +35,25 @@ class TestStripFences:
     def test_plain_fence(self):
         assert strip_fences('\n```\n{"a": 1}\n```\n  ') == '{"a": 1}'
 
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            '```json {"a": 1}```',  # single line with a tag
+            '```{"a": 1}```',  # single line, no tag
+            '```json{"a": 1}```',  # tag glued to the payload
+            '```{"a": 1}\n```',  # JSON on the opening fence line
+            '```json {"a": 1}\n```',
+            '``` JSON\n{"a": 1}\n```',  # spaced, uppercase tag
+            '```json\r\n{"a": 1}\r\n```',  # CRLF line endings
+            '```json\n{"a": 1}',  # no closing fence
+        ],
+    )
+    def test_json_on_the_fence_line_survives(self, raw):
+        assert strip_fences(raw) == '{"a": 1}'
+
+    def test_single_line_fenced_reply_parses(self):
+        assert parse_reply(f"```json {BARE}```") == parse_reply(BARE)
+
 
 class TestParseEquivalence:
     def test_fenced_and_padded_replies_equal_bare(self):

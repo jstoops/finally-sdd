@@ -15,6 +15,7 @@ import sys
 from pydantic import ValidationError
 
 from app.chat.llm import LLMError, LLMReply, OpenRouterLLMClient
+from app.chat.parsing import strip_fences
 from app.config import Settings
 
 SYSTEM = (
@@ -24,18 +25,6 @@ SYSTEM = (
     '(a list of {"ticker", "action": "add" or "remove"}).'
 )
 USER = "Buy 1 AAPL and add PYPL to my watchlist."
-FENCE = "```"
-
-
-def strip_fence(text: str) -> str:
-    """Strip whitespace and one surrounding three-backtick fence (with optional language tag)."""
-    text = text.strip()
-    if text.startswith(FENCE) and text.endswith(FENCE) and len(text) >= 2 * len(FENCE):
-        inner = text[len(FENCE) : -len(FENCE)]
-        first_line, _, rest = inner.partition("\n")
-        inner = rest if first_line.strip().isalpha() or not first_line.strip() else inner
-        text = inner.strip()
-    return text
 
 
 def redact(text: str, key: str) -> str:
@@ -49,7 +38,7 @@ async def run(key: str) -> int:
         raw = await client.complete(messages)
         print("Raw content:")
         print(redact(raw, key))
-        reply = LLMReply.model_validate_json(strip_fence(raw))
+        reply = LLMReply.model_validate_json(strip_fences(raw))
     except (LLMError, ValidationError) as exc:
         cause = exc.__cause__ if exc.__cause__ is not None else exc
         print(f"FAILED: {type(exc).__name__}: {redact(str(cause), key)}")

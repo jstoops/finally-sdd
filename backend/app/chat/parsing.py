@@ -15,11 +15,15 @@ services so error texts match the REST routes.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, StrictFloat, StrictStr
 
 _FENCE = "```"
+# An optional language tag right after the opening fence ("json", "JSON", "json5"). It can
+# never swallow the payload: a JSON object or array starts with "{" or "[".
+_LANG_TAG = re.compile(r"[A-Za-z0-9_+-]*")
 _LISTS = ("trades", "watchlist_changes")
 
 
@@ -61,11 +65,17 @@ class WatchlistItem(BaseModel):
 
 
 def strip_fences(raw: str) -> str:
-    """Strip whitespace and one surrounding ``` or ```json fence."""
+    """Strip whitespace and one surrounding ``` or ```json fence.
+
+    Only the fence and an optional language tag are dropped from the opening line, so JSON
+    written on the fence line (```json {"message": ...}```) survives. The closing fence is
+    optional.
+    """
     text = raw.strip()
     if text.startswith(_FENCE):
-        _, _, text = text.partition("\n")  # the fence line and any language tag
-        text = text.rstrip()
+        text = text[len(_FENCE) :].lstrip(" \t")
+        tag = _LANG_TAG.match(text)
+        text = text[tag.end() if tag else 0 :].strip()
         if text.endswith(_FENCE):
             text = text[: -len(_FENCE)]
         text = text.strip()
