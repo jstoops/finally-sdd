@@ -174,7 +174,7 @@ beforeEach(() => {
     snapshots: [],
     historyLoaded: false,
   });
-  useChat.setState({ entries: [], pending: false });
+  useChat.setState({ entries: [], pending: false, loaded: false, collapsed: false });
 });
 
 afterEach(() => {
@@ -588,6 +588,53 @@ describe("Terminal", () => {
     expect(
       within(screen.getByTestId("panel-chat")).getByTestId("chat-input"),
     ).toBeInTheDocument();
+  });
+
+  it("renders every panel and the header readouts at the same time (UX-02)", async () => {
+    await renderTerminal();
+    const ids = [
+      "panel-watchlist",
+      "panel-chart",
+      "panel-heatmap",
+      "panel-pnl",
+      "panel-positions",
+      "panel-trade",
+      "panel-chat",
+      "header-total",
+      "header-cash",
+      "header-pnl",
+      "connection-dot",
+      "reset-button",
+    ];
+    for (const id of ids) expect(screen.getByTestId(id)).toBeInTheDocument();
+    expect(screen.getByTestId("app-shell").querySelector("main")).toHaveAttribute(
+      "data-chat",
+      "expanded",
+    );
+  });
+
+  it("collapses and expands the chat column", async () => {
+    await renderTerminal();
+    const main = () => screen.getByTestId("app-shell").querySelector("main");
+    expect(main()).toHaveAttribute("data-chat", "expanded");
+    expect(main()?.className).toContain("xl:grid-cols-[260px_minmax(0,1fr)_360px]");
+
+    fireEvent.click(screen.getByTestId("chat-toggle"));
+    expect(main()).toHaveAttribute("data-chat", "collapsed");
+    expect(main()?.className).toContain("xl:grid-cols-[260px_minmax(0,1fr)_2.75rem]");
+    expect(screen.queryByTestId("chat-input")).toBeNull();
+    expect(screen.getByTestId("panel-chat")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("chat-toggle"));
+    expect(main()).toHaveAttribute("data-chat", "expanded");
+    expect(screen.getByTestId("chat-input")).toBeInTheDocument();
+  });
+
+  it("loads chat history once on mount", async () => {
+    const fetchMock = await renderTerminal();
+    expect(callsTo(fetchMock, "/api/chat/history")).toHaveLength(1);
+    expect(screen.queryAllByTestId("chat-system")).toHaveLength(0);
+    expect(screen.getAllByTestId("chat-prompt")).toHaveLength(3);
   });
 
   it("opens one stream and loads the watchlist and the portfolio once", async () => {
