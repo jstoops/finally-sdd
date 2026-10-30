@@ -23,12 +23,17 @@ const EMPTY_PORTFOLIO: Portfolio = {
   positions: [],
 };
 
-/** Default routes: an empty watchlist, a fresh $10,000 account and no history. */
+/**
+ * Default routes: an empty watchlist, a fresh $10,000 account, no P&L history and no chat
+ * history (the chat panel loads GET /api/chat/history on mount, so every Terminal render
+ * needs it).
+ */
 export const DEFAULT_API: Readonly<Routes> = {
   "GET /api/watchlist": { tickers: [] },
   "GET /api/portfolio": EMPTY_PORTFOLIO,
   "GET /api/trades": { trades: [] },
   "GET /api/portfolio/history": { snapshots: [] },
+  "GET /api/chat/history": { messages: [] },
 };
 
 const HISTORY_PATH = /^\/api\/prices\/([^/]+)\/history$/;

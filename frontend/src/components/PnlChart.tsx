@@ -95,7 +95,11 @@ export function PnlChart() {
       <h2 className="border-b border-border px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted">
         P&amp;L
       </h2>
-      <div data-testid="pnl-chart" className="relative min-h-0 flex-1">
+      <div
+        data-testid="pnl-chart"
+        data-point-count={snapshots.length}
+        className="relative min-h-0 flex-1"
+      >
         <div ref={containerRef} className="absolute inset-0" />
         {status !== null && (
           <p

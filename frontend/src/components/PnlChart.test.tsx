@@ -70,6 +70,16 @@ describe("PnlChart", () => {
     expect(seriesOptions.baseValue).toEqual({ type: "price", price: 10000 });
   });
 
+  it("exposes the snapshot count as data-point-count (TST-04)", () => {
+    stubApi();
+    render(<PnlChart />);
+    expect(screen.getByTestId("pnl-chart")).toHaveAttribute("data-point-count", "0");
+    act(() =>
+      usePortfolio.setState({ snapshots: [snap(T0, 10000), snap(T1, 10010)], historyLoaded: true }),
+    );
+    expect(screen.getByTestId("pnl-chart")).toHaveAttribute("data-point-count", "2");
+  });
+
   it("shows a loading status until the history is loaded", () => {
     stubApi();
     render(<PnlChart />);
