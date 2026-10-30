@@ -1,12 +1,14 @@
 "use client";
 
 // Header: the wordmark, the price-stream status dot, the simulated account's Total, Cash
-// and P&L since start (PF-04, PF-05) and the Reset button (PF-09).
+// and P&L since start (PF-04, PF-05) and the Reset button (PF-09, PF-10: blocked during a chat
+// reply, then clears the chat, sparklines and chart selection).
 import { useMemo, useState } from "react";
 
 import type { StreamStatus } from "@/api/types";
 import type { Sign } from "@/domain/market";
 import { formatMoney, formatSignedMoney, livePortfolio, moneySign } from "@/domain/portfolio";
+import { useChat } from "@/store/chat";
 import { usePortfolio } from "@/store/portfolio";
 import { usePrices } from "@/store/prices";
 import { useWatchlist } from "@/store/watchlist";
@@ -64,20 +66,38 @@ function Readout({
   );
 }
 
-/** Reset with a window.confirm gate; refetches every panel and shows a failure inline. */
+const WAIT_FOR_CHAT = "Wait for FinAlly to finish replying";
+
+/**
+ * Reset with a window.confirm gate (PF-09, PF-10). Disabled while a chat reply is in flight,
+ * so a reply can never land in the fresh account. After a successful reset it clears the
+ * chat, the sparklines and the chart selection, then reloads the watchlist (the portfolio
+ * store's reset() already reloaded the portfolio, trades and P&L history). A failure shows
+ * inline and clears nothing.
+ */
 function ResetButton() {
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const chatPending = useChat((s) => s.pending);
 
   // window is touched only inside the click handler (static export prerender).
   const onClick = async () => {
+    if (useChat.getState().pending) return;
     if (!window.confirm(RESET_CONFIRM)) return;
     setResetting(true);
     setResetError(null);
     try {
       const err = await usePortfolio.getState().reset();
-      if (err === null) void useWatchlist.getState().loadWatchlist();
-      else setResetError(err);
+      if (err === null) {
+        useChat.getState().clear();
+        usePrices.getState().clearSparklines();
+        // With no selection, the reload's nextSelection picks the first default ticker and
+        // the chart reseeds its history because `selected` changed.
+        useWatchlist.getState().clearSelection();
+        void useWatchlist.getState().loadWatchlist();
+      } else {
+        setResetError(err);
+      }
     } finally {
       setResetting(false);
     }
@@ -94,7 +114,8 @@ function ResetButton() {
         type="button"
         data-testid="reset-button"
         onClick={() => void onClick()}
-        disabled={resetting}
+        disabled={resetting || chatPending}
+        title={chatPending ? WAIT_FOR_CHAT : undefined}
         className="rounded border border-border px-2 py-0.5 text-muted hover:border-accent hover:text-accent disabled:cursor-wait disabled:opacity-50"
       >
         Reset

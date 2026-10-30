@@ -25,6 +25,8 @@ interface WatchlistState {
   /** Store the held tickers and reconcile the selection. */
   setHeld: (tickers: string[]) => void;
   select: (ticker: string) => void;
+  /** Drop the selection, so the next setEntries picks the first ticker (reset, PF-10). */
+  clearSelection: () => void;
   loadWatchlist: () => Promise<void>;
   /** POST /api/watchlist. Resolves to an inline error message, or null on success. */
   addTicker: (raw: string) => Promise<string | null>;
@@ -57,6 +59,7 @@ export const useWatchlist = create<WatchlistState>()((set, get) => ({
       ),
     }),
   select: (ticker) => set({ selected: ticker }),
+  clearSelection: () => set({ selected: null }),
   loadWatchlist: async () => {
     try {
       const data = await apiFetch<WatchlistResponse>("/api/watchlist");
