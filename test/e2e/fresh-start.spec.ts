@@ -21,6 +21,11 @@ test("fresh start shows the default watchlist, $10,000 and streaming prices", as
   await expect(page.getByTestId("header-cash")).toHaveText("$10,000.00");
   await expect(page.getByTestId("connection-dot")).toHaveAttribute("data-status", "open");
 
+  // Empty states of a fresh account.
+  await expect(page.getByTestId("positions-empty")).toBeVisible();
+  await expect(page.getByTestId("chat-message")).toHaveCount(0);
+  await expect(page.getByTestId("chat-prompt").first()).toBeVisible();
+
   const price = page.getByTestId("price-AAPL");
   await expect(price).not.toHaveText("—");
   const first = await price.textContent();
