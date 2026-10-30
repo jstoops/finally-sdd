@@ -1,0 +1,56 @@
+# E2E stack for FinAlly (PLAN section 12): the production app image in LLM mock mode plus a
+# Playwright runner. Run from the repo root:
+#   docker compose -f test/docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from playwright
+#   docker compose -f test/docker-compose.test.yml down -v
+#
+# Isolation (every test resets the account): this is its own compose project, the database
+# lives in a tmpfs that disappears with the container, no host port is published, no API key
+# is passed in, and the app image has its own tag.
+name: finally-test
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: finally-test:latest
+    networks:
+      default:
+        # Chromium upgrades http://app to https: "app" is an HSTS-preloaded top-level domain.
+        # The browser therefore reaches the app through this alias instead of the service name.
+        aliases:
+          - finally-app
+    environment:
+      LLM_MOCK: "true"
+      OPENROUTER_API_KEY: ""
+      MASSIVE_API_KEY: ""
+      DB_PATH: /app/db/finally.db
+    tmpfs:
+      - /app/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  playwright:
+    build:
+      context: .
+    environment:
+      BASE_URL: http://finally-app:8000
+      CI: "true"
+    depends_on:
+      app:
+        condition: service_healthy
+    ipc: host
+    init: true
+    volumes:
+      - ./playwright-report:/e2e/playwright-report
+      - ./test-results:/e2e/test-results

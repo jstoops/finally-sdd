@@ -9,6 +9,7 @@ from contextlib import closing
 import pytest
 from fastapi.testclient import TestClient
 
+from app.chat import MockLLMClient
 from app.db import DEFAULT_WATCHLIST
 from app.trading import TradeResult
 
@@ -195,3 +196,17 @@ class TestResetRoute:
         assert res.status_code == 200
         assert res.json() == {"status": "ok"}
         assert_default_account(client.app.state.db.path)
+
+    def test_chat_history_is_empty_after_reset(self, make_app, recording_source):
+        source = recording_source()
+        app = make_app(source_factory=lambda cache: source, llm_client=MockLLMClient())
+        with TestClient(app) as client:
+            client.app.state.cache.update("AAPL", 190.52)
+            assert client.post("/api/chat", json={"message": "buy"}).status_code == 200
+            assert len(client.get("/api/chat/history").json()["messages"]) == 2
+
+            assert client.post("/api/reset").status_code == 200
+
+            res = client.get("/api/chat/history")
+            assert res.status_code == 200
+            assert res.json() == {"messages": []}

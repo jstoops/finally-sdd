@@ -1,0 +1,12 @@
+{
+  "name": "finally-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Playwright E2E suite for FinAlly; runs from test/docker-compose.test.yml against an isolated app in LLM mock mode",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}
