@@ -83,7 +83,7 @@ Recent decisions affecting current work:
 - [Phase 1]: Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed (UAT 01 gap, minor); after pulling changes, run with `--build`. Recurred in UAT 02: always rebuild before UAT
 - [Phase 2]: Compose warns that the old `finally_finally-data` volume does not match `finally-data`; a rebuild may start on a fresh database
 - [Phase 2]: Advisory only: `GET /api/portfolio` snapshot isolation under concurrent trades has no interleaving test (VERIFICATION truth 14); review warnings WR-01 and WR-04 remain open and non-blocking
-- [Phase 3]: Cerebras strict-schema acceptance and OpenRouter provider fallback are unverified; spike a real call before building the chat pipeline
+- [Phase 3, resolved 2026-10-29]: Cerebras strict-schema acceptance verified: user ran `backend/chat_llm_spike.py` against OpenRouter with the real key; parsed reply "Order placed and watch luster updated.", usage confirmed in the OpenRouter dashboard
 
 ## Deferred Items
 
