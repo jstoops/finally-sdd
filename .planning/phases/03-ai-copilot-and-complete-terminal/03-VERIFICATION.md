@@ -1,8 +1,8 @@
 ---
 phase: 03-ai-copilot-and-complete-terminal
-verified: 2026-10-30T08:05:00Z
-status: human_needed
-score: 4/5 must-haves verified
+verified: 2026-10-30T08:50:00Z
+status: passed
+score: 5/5 must-haves verified
 covered_files:
   - ".planning/phases/03-ai-copilot-and-complete-terminal/03-01-PLAN.md"
   - ".planning/phases/03-ai-copilot-and-complete-terminal/03-01-SUMMARY.md"
@@ -15,42 +15,46 @@ covered_files:
   - ".planning/phases/03-ai-copilot-and-complete-terminal/03-05-PLAN.md"
   - ".planning/phases/03-ai-copilot-and-complete-terminal/03-05-SUMMARY.md"
   - "backend/app/api/chat.py"
+  - "backend/app/api/portfolio.py"
   - "backend/app/chat/actions.py"
   - "backend/app/chat/llm.py"
   - "backend/app/chat/parsing.py"
   - "backend/app/chat/prompt.py"
   - "backend/app/chat/service.py"
+  - "backend/app/main.py"
   - "frontend/src/components/ChatPanel.tsx"
   - "frontend/src/components/Header.tsx"
   - "frontend/src/store/chat.ts"
+  - "frontend/src/store/portfolio.ts"
   - "test/docker-compose.test.yml"
   - "test/e2e/chat.spec.ts"
-covered_digest: "v3:sha256:9037c1a24580afd559e8a4266c2c551586898349aa9cf11ebd968870ed57ada6"
-behavior_unverified: 1
+  - "test/e2e/helpers.ts"
+covered_digest: "v3:sha256:b6bcbaeba7837d46f7570754fde75bbcdf363f02e3d8b67420a83df1662afb21"
+behavior_unverified: 0
 overrides_applied: 0
-behavior_unverified_items:
-  - truth: "Asking 'Analyze my portfolio' returns a concise plain-text answer that cites the user's actual cash, positions and P&L (ROADMAP SC1; AI-01, AI-02, AI-03)"
-    test: "With a real OPENROUTER_API_KEY, buy a position, then send 'Analyze my portfolio' in the chat panel"
-    expected: "A short plain-text reply (no markdown tables) quoting the real cash balance, the held positions and their P&L"
-    why_human: "Answer quality is non-inferable. The prompt and context builders are wired and unit-tested, but the human spike used a trivial one-line prompt, not the real portfolio context."
-human_verification:
-  - test: "Live 'Analyze my portfolio' against OpenRouter/Cerebras (see behavior_unverified_items)"
-    expected: "Concise plain-text answer citing actual cash, positions and P&L; 'Buy 5 NVDA' returns an executed chip"
-    why_human: "Non-inferable model behavior; automated suites use the mock or a fake completion by design"
-  - test: "Tablet layout at 1024x768 and 768x1024"
-    expected: "All panels reachable, chat collapsed rail works, starter prompts usable"
-    why_human: "Visual and responsive behavior; E2E runs only at 1440x900. The orchestrator also lists this check as pending."
-  - test: "Decide on CR-01 (reset not serialized with an in-flight chat turn on the server)"
-    expected: "Either accept the documented demo limitation (plan threat T-03-12) or schedule a gap-closure plan to take the chat turn lock in the reset route"
-    why_human: "Product and risk decision. PF-10's written text (frontend guard) is met, but the Header comment 'a reply can never land in the fresh account' is false for a second tab or direct API call."
+re_verification:
+  previous_status: human_needed
+  previous_score: 4/5
+  gaps_closed:
+    - "Live 'Analyze my portfolio' with the real model (human UAT test 2, pass)"
+    - "Tablet layout at 1024x768 and 768x1024 (human UAT test 3, pass)"
+    - "CR-01 reset not serialized with an in-flight chat turn (fixed in 836898b, UAT test 1, pass)"
+    - "WR-01 to WR-04 (fixed in a85d3ff, 2f997c5, 23dccf9, 9616a29)"
+  gaps_remaining: []
+  regressions: []
+advisory:
+  - finding: "Mock matching uses word boundaries, PLAN section 9 says 'contains' (IN-01)"
+    category: other
+    reason: "Adopted gap G-14; deterministic and E2E-safe, but differs from the plan wording. Info only."
+    evidence_status: "none provided"
 ---
 
 # Phase 3: AI Copilot and Complete Terminal Verification Report
 
 **Phase Goal:** The user can ask FinAlly in plain language to analyze the portfolio, trade and manage the watchlist, see every requested action execute instantly through the same rules as manual trades, and use the finished terminal with every panel on screen, proven by the full unit and end-to-end suites
 **Verified:** 2026-10-30
-**Status:** human_needed
-**Re-verification:** No, initial verification
+**Status:** passed
+**Re-verification:** Yes. This regenerates the earlier `human_needed` report after the code-review fixes (CR-01, WR-01 to WR-04) changed `parsing.py`, `service.py`, `ChatPanel.tsx`, `Header.tsx` and `chat.ts`, and after the human UAT (`03-UAT.md`, 3/3 pass). The earlier report had no `gaps:`; all its human items are now resolved.
 
 ## Goal Achievement
 
@@ -58,111 +62,101 @@ human_verification:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | "Buy 5 NVDA" or a starter chip shows loading, blocks a second send, returns an inline chip, and panels refresh; "Analyze my portfolio" cites real data | PRESENT_BEHAVIOR_UNVERIFIED | Buy/chip/refresh path is verified: `ChatPanel.submit` guards on `pending`, the Send button is disabled while pending, `chat-loading` renders, and a reply with `actions` calls `usePortfolio.refresh()` (portfolio, trades, history) and `loadWatchlist()`. E2E chat spec "mocked buy" passes. The analysis half (real model citing real numbers) has no automated evidence by design. |
-| 2 | Unrunnable actions give a templated warning note and a distinct failed chip while the others still run | VERIFIED | `actions.py` runs each item independently, caps at 10+10, records `failed` with the service message, and builds the note. `service.py` appends notes after one blank line. Chip failed state uses `data-status="failed"` and `border-down`. E2E "sell with nothing held" asserts the exact note. Backend tests passed. |
-| 3 | 503 without key, 502 on LLM failure with the user message kept, 400 for empty or over-long, deterministic mock | VERIFIED | `handle()` validates (400) and checks the client (503) before any write, stores the user row before the LLM call, maps `LLMError` and `ReplyParseError` to 502. `factory.py` gives mock-before-key precedence. Frontend renders `chat-system` bubbles with the server text. litellm is imported only inside `OpenRouterLLMClient.warm()`. |
-| 4 | Reload restores the last 50 messages with chips; Reset (disabled while chat is in flight) clears chat, sparklines and selection and refetches everything | VERIFIED (with CR-01 caveat) | `GET /api/chat/history` serves the last 50 oldest first; the E2E reload test passes. `Header.ResetButton` is disabled on `useChat.pending`, then calls `reset()` (refresh of portfolio, trades, history), `chat.clear()`, `clearSparklines()`, `clearSelection()` and `loadWatchlist()`. The server-side serialization gap is recorded below. |
-| 5 | All panels visible at once on a wide screen and usable on tablet; backend, frontend and Playwright suites pass from `test/docker-compose.test.yml` under `LLM_MOCK=true` | VERIFIED (tablet pending human) | I re-ran the E2E compose myself: 12 passed, exit 0, no retries. Backend 566 passed; frontend 320 passed in 18 files; `tsc` and `eslint` clean. The 1440x900 all-panels spec exists. The tablet check is a human item. |
+| 1 | "Buy 5 NVDA" or a starter chip shows loading, blocks a second send, returns an inline chip, panels refresh; "Analyze my portfolio" cites real data | VERIFIED | `ChatPanel.submit` returns early on `pending`, `!settled` or `resetting`. Send is disabled on the same conditions. `chat-loading` renders while pending. A reply with `actions` (or a failure with `mayHaveActed`) refreshes the portfolio and watchlist stores (`ChatPanel.tsx:164-177`). The mocked-buy E2E passed. The real-model analysis half was confirmed by the human in UAT test 2: the reply returned the actual cash amounts and percentages, and a live "buy" executed with chips. |
+| 2 | Unrunnable actions give a templated warning note and a distinct failed chip while the others still run | VERIFIED | `service.py:104-107` appends the notes after one blank line. Chips carry `data-status` with `border-down` for failed. The E2E "sell with nothing held" spec asserts the note. Covered by backend tests. |
+| 3 | 503 without key, 502 on LLM failure with the user message kept, 400 for empty or over-long, deterministic mock | VERIFIED | `service.py:79-103`. 400 and 503 are raised before any write. The user row is inserted before the LLM call. `LLMError` and `ReplyParseError` map to `LLMFailedError` (502). Mock is selected by `create_llm_client`. |
+| 4 | Reload restores the last 50 messages with chips; Reset (disabled while chat is in flight) clears chat, sparklines and selection and refetches everything | VERIFIED | `history()` serves the last 50 oldest first. `Header.ResetButton` is disabled on `chatPending` or `resetting`. `usePortfolio.reset(onCommitted)` clears chat, sparklines and selection right after the POST succeeds, then refreshes. CR-01 is closed on the server: `POST /api/reset` runs `async with chat_turn_lock: await portfolio.reset()` (`api/portfolio.py:69-70`), with the lock wired from `ChatService.turn_lock` in `main.py:131`. |
+| 5 | All panels visible at once on a wide screen and usable on tablet; backend, frontend and Playwright suites pass under `LLM_MOCK=true` | VERIFIED | I re-ran the E2E compose myself on the post-fix tree (project `finally-verify03b`): 12 passed in 13.2s, exit 0, torn down with `down -v`. The orchestrator ran backend (577 passed) and frontend (328 passed). Tablet layout was confirmed by the human in UAT test 3. |
 
-**Score:** 4/5 truths verified (1 present, behavior-unverified)
+**Score:** 5/5 truths verified (0 behavior-unverified)
 
 ### Required Artifacts
 
 | Artifact | Status | Details |
 |----------|--------|---------|
-| `backend/app/chat/{service,actions,parsing,prompt,mock,llm,factory}.py` | VERIFIED | Substantive, no stubs. Wired from `main.py` via `create_llm_client` and `create_chat_router`. |
-| `backend/app/api/chat.py` | VERIFIED | POST `/api/chat` and GET `/api/chat/history`, strict `StrictStr` body. |
-| `backend/app/config.py` | VERIFIED | `openrouter_api_key` uses `field(repr=False)`; `llm_mock` is case-insensitive. |
-| `Dockerfile` | VERIFIED | `LITELLM_LOCAL_MODEL_COST_MAP=True` in the runtime ENV. |
-| `backend/chat_llm_spike.py` | VERIFIED | Human-run only; no test imports it. |
-| `frontend/src/store/chat.ts`, `components/ChatPanel.tsx`, `Header.tsx`, `Terminal.tsx` | VERIFIED | Sequence guard, clear epoch, code-point pre-check, `data-testid` hooks, collapsible grid column. |
-| `test/{docker-compose.test.yml,Dockerfile,package.json,playwright.config.ts,e2e/*}` | VERIFIED | Own compose project name, tmpfs DB, no named volume, no `.env`, BASE_URL required, workers 1. |
+| `backend/app/chat/{service,actions,parsing,prompt,mock,llm,factory}.py` | VERIFIED | Substantive and wired from `main.py` through `create_llm_client` and `create_chat_router`. |
+| `backend/app/api/chat.py`, `backend/app/api/portfolio.py` | VERIFIED | `create_portfolio_router` now requires `chat_turn_lock`; reset takes it before the state lock (the same order as a chat turn), so there is no deadlock. |
+| `frontend/src/store/{chat,portfolio}.ts`, `components/{ChatPanel,Header}.tsx` | VERIFIED | `settled`, `resetting` and `SendResult.mayHaveActed` are all read by the panel and header. |
+| `test/{docker-compose.test.yml,e2e/*}` | VERIFIED | Own compose project, tmpfs DB, no named volume, `LLM_MOCK=true`, empty key. |
 
 ### Key Link Verification
 
 | From | To | Status |
 |------|----|--------|
-| `api/chat.py` to `ChatService.handle` / `.history` | WIRED |
-| `actions.py` to `TradeService.execute`, `WatchlistService.add/remove` | WIRED (same services as the REST routes) |
-| `main.py` to `create_chat_router`, `create_llm_client` | WIRED |
-| `ChatPanel` to `usePortfolio.refresh` and `useWatchlist.loadWatchlist` | WIRED |
-| `Header` to `useChat` (pending gate, clear) | WIRED |
-| `llm.py` to `service.py` (`LLMError` mapped to 502) | WIRED |
+| `main.py` to `create_portfolio_router(..., chat_service.turn_lock)` | WIRED |
+| `api/portfolio.py` reset to `ChatService.turn_lock` then `PortfolioService.reset` | WIRED |
+| `ChatPanel` to `usePortfolio.refresh` / `useWatchlist.loadWatchlist` (incl. failed-with-mayHaveActed) | WIRED |
+| `Header` to `usePortfolio.reset(onCommitted)` to `useChat.clear`, `clearSparklines`, `clearSelection` | WIRED |
+| `ChatPanel` to `usePortfolio.resetting` and `useChat.settled` (Send gate) | WIRED |
+| `actions.py` to `TradeService.execute`, `WatchlistService.add/remove` (same services as REST) | WIRED |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data | Source | Real data | Status |
 |----------|------|--------|-----------|--------|
 | Prompt context | cash, positions, watchlist | `PortfolioService.view()` and `WatchlistService.list_entries()` | Yes | FLOWING |
-| Chat chips | `actions` | stored `chat_messages.actions` / live reply | Yes | FLOWING |
-| Trade chip price | fill price | `TradeResult.trade.price` | Yes | FLOWING |
+| Chat chips | `actions` | stored `chat_messages.actions` or the live reply | Yes | FLOWING |
+| Assistant row after actions | row built before the write; a failed write is logged and the row is still returned (WR-04) | `service.py:108-115` | Yes | FLOWING |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Backend suite | `uv run --directory backend --extra dev pytest -q` | 566 passed | PASS |
-| Frontend suite | `npx vitest run` | 320 passed (18 files) | PASS |
-| Types and lint | `tsc --noEmit`, `eslint .` | clean | PASS |
-| E2E suite | compose project `finally-verify03`, `up --build --abort-on-container-exit --exit-code-from playwright` | 12 passed, exit 0, no retries; torn down with `down -v`; `finally-data` untouched | PASS |
-| Fenced reply on one line | `parse_reply('```json {"message":"hi"}```')` | "Reply is not valid JSON" | FAIL (see WR-03) |
+| Backend suite (orchestrator) | `uv run --extra dev pytest -q` | 577 passed | PASS |
+| Frontend suite (orchestrator) | `npx vitest run` | 328 passed | PASS |
+| Fix-specific backend tests (my run) | `pytest -q -k "ResetDuringTurn or StoreFailure or fence"` | 16 passed | PASS |
+| E2E suite (my run, post-fix tree) | `docker compose -p finally-verify03b -f test/docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from playwright` | 12 passed, exit 0 | PASS |
+| One-line fenced reply (previously FAIL, WR-03) | `strip_fences` code review plus the nine new parser cases | Now keeps JSON on the fence line | PASS |
+| Reset waits for an in-flight turn (CR-01) | `TestResetDuringTurn`: the gated LLM holds the turn, reset stays pending, then both return 200 and the final account is $10,000 with no positions, trades or chat rows | Passes | PASS |
+
+Note: `03-REVIEW-FIX.md` states that E2E was not run after the fixes. That gap is now closed by my run above.
+
+### Probe Execution
+
+Step 7c: SKIPPED. The phase declares no probe scripts.
 
 ### Requirements Coverage
 
-All 22 phase IDs are claimed by plan frontmatter (03-02: AI-01..11, TST-01; 03-03: AI-11..16, PF-10, UX-02, TST-02, TST-04; 03-04: AI-01, AI-09; 03-05: TST-01..04, UX-02) and appear in REQUIREMENTS.md mapped to Phase 3. No orphans.
+All 22 phase IDs are claimed by plan frontmatter and appear in REQUIREMENTS.md mapped to Phase 3 as Complete. No orphans.
 
 | Requirement | Status | Evidence |
 |-------------|--------|----------|
-| AI-01 | SATISFIED (live quality human) | `OpenRouterLLMClient` uses the model, `response_format=LLMReply`, `reasoning_effort="low"` and the Cerebras `extra_body`; the spike was human-verified |
-| AI-02, AI-03 | SATISFIED | `prompt.py`: system prompt, context system message, 20-message history, new message last |
-| AI-04 | SATISFIED | Strict envelope, per-item validation, 502 with the user row kept (WR-03 edge noted) |
-| AI-05, AI-06, AI-07, AI-08 | SATISFIED | `actions.py` and the `service.py` note path |
-| AI-09 | SATISFIED | 503 and 400 before any write |
-| AI-10 | SATISFIED | Word-boundary mock, same path as real replies (adopted gap G-14; PLAN §9 says "contains", IN-01) |
-| AI-11 to AI-16 | SATISFIED | `ChatPanel` and `chat.ts`; unit tests and E2E |
-| PF-10 | SATISFIED as written; see CR-01 | Frontend disable and the clear-and-refetch sequence |
-| UX-02 | SATISFIED on desktop; tablet human | E2E 1440x900 all-panels spec |
-| TST-01 to TST-04 | SATISFIED | Suites above; the 12 E2E tests cover the seven §12 scenarios; `data-testid` and `data-*` hooks used |
+| AI-01 | SATISFIED | Real client uses the specified model, structured output and the Cerebras provider. UAT test 2 confirmed live. |
+| AI-02, AI-03 | SATISFIED | `prompt.py`: system prompt, context message, 20-message history, new message last. |
+| AI-04 | SATISFIED | Strict envelope, per-item validation, 502 with the user row kept. WR-03 fixed. |
+| AI-05 to AI-08 | SATISFIED | `actions.py` and the `service.py` note path. |
+| AI-09 | SATISFIED | 503 and 400 before any write. |
+| AI-10 | SATISFIED | Mock follows the same execution path (word-boundary matching; IN-01 advisory). |
+| AI-11 to AI-16 | SATISFIED | `ChatPanel` and `chat.ts`; unit tests and E2E; UAT confirmed starter prompts and collapse. |
+| PF-10 | SATISFIED | Frontend disable, clear and refetch, plus the server-side turn lock. CR-01 resolved. |
+| UX-02 | SATISFIED | E2E 1440x900 all-panels spec; tablet confirmed by UAT test 3. |
+| TST-01 to TST-04 | SATISFIED | Backend 577, frontend 328, E2E 12 across the seven section 12 scenarios. |
 
 ### Prohibitions (judgment tier, non-authoritative verdicts)
 
 | Prohibition | Verdict | Evidence |
 |-------------|---------|----------|
-| Failed action must not read as success | RESOLVED (judge) | Notes are appended whenever an outcome is `failed`, regardless of the model's text. Human review recommended. |
-| No actions beyond the latest request | RESOLVED (judge) | `replay_content` replays text plus an `[executed: ...]` summary, never the raw action JSON; the prompt limits actions to the latest message. Human review recommended. |
-| No paid OpenRouter call from tests or E2E | RESOLVED (judge) | No test imports litellm; the E2E compose sets `LLM_MOCK=true` and an empty key. |
-| E2E must not touch the real portfolio | RESOLVED (judge) | Project `finally-test`, tmpfs DB, no volume, no env_file, BASE_URL required. My run used a distinct project name and left `finally-data` alone. |
+| Failed action must not read as success | RESOLVED (judge) | Notes are appended for every `failed` outcome, regardless of the model's text. |
+| No actions beyond the latest request | RESOLVED (judge) | History replay is text plus an `[executed: ...]` summary, never raw action JSON. |
+| No paid OpenRouter call from tests or E2E | RESOLVED (judge) | litellm is imported only inside the real client's `warm()`. The E2E compose sets `LLM_MOCK=true` and an empty key. |
+| E2E must not touch the real portfolio | RESOLVED (judge) | Distinct project name, tmpfs DB, no volume; I confirmed no state leaked. |
 
 ### Anti-Patterns Found
 
-No TBD, FIXME or XXX markers in the phase files. No stubs. Code review findings were confirmed against the code:
+No TBD, FIXME or XXX markers in the changed phase files. No stubs. The earlier CR-01 and WR-01 to WR-04 findings are fixed in the code (read directly, not taken from the fix report). Remaining items are Info only:
 
-| Finding | Severity | Impact |
-|---------|----------|--------|
-| CR-01: `ChatService.handle` holds only `_turn_lock` across the LLM call. `PortfolioService.reset` takes only the state lock. A reset in that window deletes the user row, then the reply's trades run on the new $10,000 account and an orphan assistant row is stored. Confirmed in `service.py:79-101` and `portfolio.py:107-117`. | Warning (decision requested) | Requirement text is met, and plan threat T-03-12 recorded this as an accepted demo limitation. The reviewer rated it critical because it breaks the "every number stays correct" core value in the second-tab, direct-API and send-during-reset cases. The Header comment overclaims. The fix is small: have the reset route wait on the chat turn lock. |
-| WR-01: chat is cleared only after the post-reset refresh, so a message sent in that window is wiped from the UI | Warning | UI and server disagree until reload |
-| WR-02: sending before the history load returns discards the stored conversation until reload; `loaded` is never read | Warning | Starter chips are clickable during that window |
-| WR-03: `strip_fences` drops JSON on the fence line (reproduced above) | Warning | A valid one-line fenced reply becomes a 502. Rare with `response_format`. |
-| WR-04: a failure after actions ran returns a bare 500 and the UI does not refresh | Warning | Stale panels in a rare DB-error case |
-| IN-01 to IN-07 | Info | Mock word boundaries vs PLAN wording, long ticker echo, `os.environ` from a worker thread, dead `loaded` state, repeated empty-submit bubbles, CI retries=1 (no flaky run seen), fresh-start reset not asserted |
+| Item | Severity | Impact |
+|------|----------|--------|
+| IN-01 to IN-07 (mock word boundaries vs PLAN wording, long ticker echo, `os.environ` read from a worker thread, dead `loaded` state, repeated empty-submit bubbles, CI retries=1, fresh-start reset not asserted) | Info | No goal impact |
+| WR-04 backend test does not run against the pre-fix code, because `_write` did not exist then | Info | The fix itself is verified by reading `service.py:108-115` |
 
 ### Human Verification Required
 
-1. **Live "Analyze my portfolio"**
-   - **Test:** With a real key, hold a position and send "Analyze my portfolio", then "Buy 5 NVDA".
-   - **Expected:** Concise plain-text reply with the true cash, positions and P&L; an executed chip for the buy.
-   - **Why human:** Non-inferable model output. The spike proved the transport and schema only.
-2. **Tablet layout**
-   - **Test:** Open at 1024x768 and 768x1024.
-   - **Expected:** Chat rail collapses and expands, starter prompts work, every panel reachable.
-   - **Why human:** Visual; E2E runs only at 1440x900.
-3. **CR-01 decision**
-   - **Test/decision:** Accept the documented limitation, or add a gap-closure plan (reset takes the chat turn lock; disable Send while a reset runs; clear chat right after the reset POST; a test that gates the LLM mid-turn and resets).
-   - **Why human:** Risk acceptance on a core-value invariant.
+None outstanding. `03-UAT.md` records 3/3 pass, covering CR-01 sign-off, live real-model portfolio analysis and trading, and tablet layout. These are treated as human-verified.
 
 ### Gaps Summary
 
-No must-have truth failed. Every roadmap criterion and all 22 requirement IDs have code evidence, and I reproduced the green suites: backend 566, frontend 320, E2E 12 from the isolated compose project. The status is `human_needed`, not `passed`, for three reasons. The real-model analysis behavior is non-inferable and was only spiked with a trivial prompt. The tablet layout check is still pending. The reviewer's CR-01 is a real, reproducible-by-inspection server-side race that the phase planned to accept, so it needs an explicit sign-off or a small follow-up plan (together with WR-01 to WR-04, which are low-cost).
+No gaps. All five roadmap criteria and all 22 requirement IDs have code evidence on the post-fix tree. I re-ran the E2E suite (12 passed) and the fix-specific backend tests, and the orchestrator's backend (577) and frontend (328) suites are green. The previous `human_needed` items were closed by the UAT and the review fixes.
 
 ---
 
