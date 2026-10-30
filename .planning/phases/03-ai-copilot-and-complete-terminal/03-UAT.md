@@ -3,7 +3,7 @@ status: testing
 phase: 03-ai-copilot-and-complete-terminal
 source: [03-VERIFICATION.md]
 started: 2026-10-30T07:58:13Z
-updated: 2026-10-30T08:10:00Z
+updated: 2026-10-30T08:20:00Z
 ---
 
 ## Current Test
@@ -27,8 +27,8 @@ result: [pending]
 
 ### 2. Live "Analyze my portfolio" with the real model
 expected: With OPENROUTER_API_KEY set and a few positions held, asking "Analyze my portfolio" returns a reply that cites the actual cash, positions and P&L, and a "buy"/"add" request through the real model executes and shows chips.
-result: [pending]
-notes: 2026-10-30 partial: real model replied "Placing order to buy 5 shares of NVDA." and the trade executed with chips (live trade path works). Portfolio analysis citing real cash/positions/P&L still to check.
+result: pass
+notes: 2026-10-30 partial: real model replied "Placing order to buy 5 shares of NVDA." and the trade executed with chips (live trade path works). Portfolio analysis citing real cash/positions/P&L still to check. 2026-10-30 user: "Analyze my portfolio" with the real model returned the actual cash amounts and percentages.
 
 ### 3. Tablet layout at 1024x768 and 768x1024
 expected: Every panel is usable with no overlap or horizontal scroll. Below 1280px wide (both tablet sizes) the chat sits under the center column and the page scrolls; the three starter prompts are readable and clickable in an empty chat; the collapse toggle shrinks the chat to its header row and restores it. (The thin side rail exists only at 1280px and wider.)
@@ -38,9 +38,9 @@ notes: 2026-10-30 user: every panel usable at 1024x768 with chat stacked below P
 ## Summary
 
 total: 3
-passed: 1
+passed: 2
 issues: 0
-pending: 2
+pending: 1
 skipped: 0
 blocked: 0
 
