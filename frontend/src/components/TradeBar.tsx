@@ -174,7 +174,7 @@ export function TradePanel() {
         Trade
       </h2>
       <TradeBar />
-      <h3 className="border-y border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+      <h3 className="border-y border-border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-muted">
         Trades
       </h3>
       <TradeHistory />

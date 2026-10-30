@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Snapshot } from "@/api/types";
 import { PNL_REFRESH_MS, PnlChart } from "@/components/PnlChart";
+import { PNL_TOKEN_FALLBACK, pnlSeriesColors } from "@/domain/chart";
 import { usePortfolio } from "@/store/portfolio";
 import { callsTo, stubApi } from "@/test/stubFetch";
 
@@ -117,6 +118,46 @@ describe("PnlChart", () => {
     act(() => usePortfolio.setState({ snapshots: [], historyLoaded: true }));
     expect(screen.getByTestId("pnl-status")).toHaveTextContent("No P&L history yet");
     expect(lastCall(lw.series.setData)).toEqual([[]]);
+  });
+
+  describe("series colors from the terminal tokens", () => {
+    afterEach(() => {
+      document.documentElement.style.removeProperty("--color-up");
+      document.documentElement.style.removeProperty("--color-down");
+    });
+
+    function seriesOptions(): Record<string, unknown> {
+      const [, options] = lw.chart.addSeries.mock.calls[0] as unknown as [
+        unknown,
+        Record<string, unknown>,
+      ];
+      return options;
+    }
+
+    it("reads --color-up and --color-down when the chart mounts", () => {
+      document.documentElement.style.setProperty("--color-up", "#00ff00");
+      document.documentElement.style.setProperty("--color-down", "#ff0000");
+      stubApi();
+      render(<PnlChart />);
+      const options = seriesOptions();
+      expect(options).toMatchObject({
+        topLineColor: "#00ff00",
+        topFillColor1: "rgba(0,255,0,0.28)",
+        topFillColor2: "rgba(0,255,0,0.05)",
+        bottomLineColor: "#ff0000",
+        bottomFillColor1: "rgba(255,0,0,0.05)",
+        bottomFillColor2: "rgba(255,0,0,0.28)",
+      });
+      expect(options.baseValue).toEqual({ type: "price", price: 10000 });
+    });
+
+    it("falls back to the token values when the variables are not set", () => {
+      stubApi();
+      render(<PnlChart />);
+      expect(seriesOptions()).toMatchObject(
+        pnlSeriesColors(PNL_TOKEN_FALLBACK.up, PNL_TOKEN_FALLBACK.down),
+      );
+    });
   });
 
   it("refetches the history every 30 seconds and stops after unmount", async () => {
