@@ -124,4 +124,22 @@ describe("nextSelection", () => {
     expect(nextSelection([], "AAPL")).toBeNull();
     expect(nextSelection([], null)).toBeNull();
   });
+
+  it("keeps a held but unwatched selection", () => {
+    expect(nextSelection(["AAPL", "MSFT"], "TSLA", ["TSLA"])).toBe("TSLA");
+  });
+
+  it("falls back to the first watchlist ticker once the selection is neither watched nor held", () => {
+    expect(nextSelection(["AAPL"], "TSLA", [])).toBe("AAPL");
+    expect(nextSelection([], "TSLA", [])).toBeNull();
+  });
+
+  it("never picks a held ticker as the fallback", () => {
+    expect(nextSelection([], null, ["TSLA"])).toBeNull();
+    expect(nextSelection(["AAPL"], null, ["TSLA"])).toBe("AAPL");
+  });
+
+  it("keeps the two-argument behavior", () => {
+    expect(nextSelection(["AAPL"], "MSFT")).toBe("AAPL");
+  });
 });

@@ -6,6 +6,17 @@ FinAlly (Finance Ally) is a single-container AI trading workstation. It streams 
 
 The full product specification is `planning/PLAN.md`. This document captures the project context; PLAN.md stays the detailed contract for API shapes, schema, and behavior.
 
+## Current State
+
+**Shipped: v1 MVP (2026-10-30).** Every PLAN.md feature ships in one container: the live market terminal, manual trading with a live portfolio, and the AI copilot (real model or `LLM_MOCK`), with backend (577), frontend (347) and Playwright E2E (17) suites green. The milestone audit scored 64/64 requirements, 10/10 integration and 7/7 flows, with status tech_debt. See `.planning/MILESTONES.md`.
+
+## Next Milestone Goals
+
+Not defined yet; start with `/gsd-new-milestone`. Candidates:
+- Pay down the v1 tech debt listed under Active (stale-image start scripts, volume naming, the watchlist load race, portfolio load-error states, 768px ticker clipping)
+- Close backlog 999.1 (macOS/Linux start-script browser launch) and Phase 3 Nyquist validation
+- Stretch: cloud deployment (PLAN §11 App Runner/Render), CI running ruff, pytest, vitest and E2E
+
 ## Core Value
 
 A user can open one URL, watch prices stream live, and trade a simulated portfolio, either manually or by asking the AI copilot, with every number (cash, positions, P&L) staying correct and updating in real time.
@@ -33,45 +44,35 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 - ✓ Watchlist panel: flashing price, Chg % from session open, inline SVG sparkline, add/remove with inline errors — Phase 1
 - ✓ Main chart (Lightweight Charts) seeded from the history endpoint and extended from SSE — Phase 1
 - ✓ Multi-stage Dockerfile (Node 22 → Python 3.12 + uv, one uvicorn worker), `docker-compose.yml` with `finally-data`, idempotent start/stop scripts, `.env.example`, `db/.gitkeep` — Phase 1 (`start_mac.sh` browser launch still unverified on macOS/Linux; ROADMAP backlog 999.1)
+- ✓ `POST /api/portfolio/trade`: market orders at the cached price under the shared Trade Rules (ticker regex, qty > 0 rounded half-up to 4 dp and capped at 1,000,000,000, cash/shares checks with 1e-6 tolerance, avg-cost math, dust removal), one transaction under `state_lock`, then a snapshot; returns trade plus updated portfolio — Phase 2
+- ✓ `GET /api/portfolio` (cash, positions value, total, unrealized P&L, per-position P&L/P&L %/weight, avg-cost fallback), `GET /api/portfolio/history` (oldest first), `GET /api/trades` — Phase 2
+- ✓ `POST /api/reset`: one transaction restores the seeded state, re-syncs tracked tickers, records a fresh snapshot; PLAN §8 contract kept exactly (U-1) — Phase 2
+- ✓ Tracked tickers with positions: a held ticker removed from the watchlist keeps streaming; selling an unwatched ticker to zero drops it — Phase 2
+- ✓ Header live total, cash, P&L and Reset with `window.confirm`; positions table; squarified-treemap heatmap; P&L BaselineSeries chart at $10,000; trade bar with inline errors; trade history — all live from SSE with no `/api/portfolio` polling (P&L history polls every 30 s to match snapshots) — Phase 2 (UAT 02: 5/5)
+- ✓ `POST /api/chat` via LiteLLM → OpenRouter (`openrouter/openai/gpt-oss-120b`, Cerebras, strict structured output), portfolio context plus last 20 messages, FinAlly system prompt — Phase 3
+- ✓ Auto-execution (watchlist changes first, then trades, each independent, per-action status in `actions`, at most 10 + 10 per reply) through the same `TradeService`/`WatchlistService` rules; templated ⚠️ failure notes, no second LLM call — Phase 3
+- ✓ `GET /api/chat/history` (last 50, oldest first); `LLM_MOCK=true` deterministic mock through the same path; 503 without a key, 502 on LLM failure/unparseable output with the user message stored; 2,000-character cap — Phase 3
+- ✓ AI chat panel: collapsible side rail (≥1280px) / stacked below, history on load, starter prompts, loading row, inline action chips with failed actions distinct; refetch after actions; reset clears chat, sparklines and selection (PF-10) and waits for an in-flight chat turn — Phase 3 (UAT 03: 3/3)
+- ✓ Backend pytest (577), frontend unit tests (347), Playwright E2E (17) in `test/docker-compose.test.yml` with `LLM_MOCK=true` and reset per test, covering all §12 scenarios plus tablet layout — Phase 3
 
 ### Active
 
 <!-- Everything else in planning/PLAN.md. Hypotheses until shipped. -->
 
-**Portfolio & trading**
-- [ ] `POST /api/portfolio/trade`: market orders at the cached price, shared Trade Rules (ticker regex, qty > 0 rounded to 4dp, cash/shares checks with 1e-6 tolerance, avg-cost math, dust removal), one transaction, then a snapshot; returns trade plus updated portfolio
-- [ ] `GET /api/portfolio`: cash, positions value, total, unrealized P&L, per-position P&L, P&L %, and weight; falls back to avg cost when no price is cached
-- [ ] `GET /api/portfolio/history`: snapshots oldest first
-- [ ] `POST /api/reset`: one transaction restores the seeded state, re-syncs tracked tickers, and records a fresh snapshot
-
-**Tracked tickers**
-- [ ] Removing a held ticker from the watchlist keeps it priced; selling an unwatched ticker to zero drops it (reconcile exists; verify with positions)
-
-**AI chat**
-- [ ] `POST /api/chat` via LiteLLM → OpenRouter (`openrouter/openai/gpt-oss-120b`, Cerebras provider) with structured output (`message`, `trades`, `watchlist_changes`)
-- [ ] Portfolio context and the last 20 messages in the prompt; FinAlly system prompt
-- [ ] Auto-execution: watchlist changes first, then trades; each action independent; per-action status recorded in `actions`
-- [ ] Templated ⚠️ failure notes appended to the message; no second LLM call
-- [ ] `GET /api/chat/history` (last 50 messages, oldest first)
-- [ ] `LLM_MOCK=true` deterministic mock (buy / sell / add X / remove X / greeting) through the same execution path
-- [ ] Missing `OPENROUTER_API_KEY` → 503; LLM failure or unparseable output → 502 with the user message still stored
-
-**Frontend (Next.js static export, TypeScript, Tailwind dark theme)**
-- [ ] Header: live total value, cash, Reset with `window.confirm`
-- [ ] Portfolio heatmap: in-house squarified treemap sized by weight, colored by P&L
-- [ ] P&L chart (Lightweight Charts) from `/api/portfolio/history`
-- [ ] Positions table: ticker, qty, avg cost, current price, unrealized P&L, P&L %
-- [ ] Trade bar: ticker, quantity, buy/sell, inline 400 errors
-- [ ] AI chat panel: collapsible, history loaded on page load, loading indicator, inline action confirmations, failed actions visibly distinct
-- [ ] Data flow: live values computed client-side from SSE plus positions; refetch after chat actions; full refetch and cleared chat/sparklines after reset
-
 **Packaging & ops**
-- [ ] Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed; rebuild when sources are newer, or say so in the README quick start (UAT 01 gap, minor)
+- [ ] Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed; rebuild when sources are newer, or say so in the README quick start (UAT 01 gap, minor; bit again in UAT 02 test 5, where a stale image hid the 02-07 quantity cap)
+- [ ] Compose volume naming: an existing `finally_finally-data` volume no longer matches the compose file's `finally-data`, so a rebuild can start on a fresh database (seen during UAT 02)
 
-**Testing**
-- [ ] Backend pytest: tracked tickers, trade logic and edge cases, LLM parsing, partial failures and mock mode, API status codes and shapes, reset
-- [ ] Frontend unit tests: rendering, price flash, connection status transitions, watchlist CRUD, portfolio calculations, chat rendering
-- [ ] Playwright E2E in `test/` with `docker-compose.test.yml`, `LLM_MOCK=true`, reset before each test, covering all §12 scenarios
+**UI polish**
+- [ ] Watchlist column clips ticker symbols to one letter at 768px width (found in quick task 261029-vpc; predates it)
+
+**v1 tech debt (from `milestones/v1-MILESTONE-AUDIT.md`)**
+- [ ] `loadWatchlist` sequence guard so a slow GET can't overwrite a newer add/remove (Phase 1 IN-02)
+- [ ] Positions table and heatmap show a load error instead of the empty state when `/api/portfolio` fails (Phase 2 WR-04)
+- [ ] Guard the post-commit `view_sync` so a committed fill never reports 500/failed (Phase 2 IN-01)
+- [ ] Concurrency test for read isolation of `GET /api/portfolio` and `/history` under concurrent trades
+- [ ] Reconcile Phase 3 Nyquist validation (`03-VALIDATION.md` still draft)
+- [ ] CI that runs ruff, pytest, vitest and E2E (no CI runs them today)
 
 ### Out of Scope
 
@@ -87,7 +88,7 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 
 ## Context
 
-- **Current state (after Phase 1):** the walking skeleton ships in one container: app entry point, SQLite, watchlist API, SSE-driven terminal with watchlist, sparklines and main chart, Docker and start/stop scripts. Portfolio, trading, reset, AI chat and E2E tests are still absent.
+- **Current state (v1 shipped 2026-10-30, ~3.3k backend + ~8k frontend LOC):** every PLAN.md feature ships in one container: live terminal, manual trading, the AI copilot (real model or `LLM_MOCK`) that trades and edits the watchlist, and the full test pyramid (577 backend, 347 frontend, 17 E2E). All roadmap phases are complete; open items are minor packaging/ops and UI polish.
 - **Established patterns to follow:** router factories (`create_*_router(deps)`) with no module-level state; dependencies built in `lifespan` and injected; blocking work kept off the event loop; only sources write to `PriceCache`; trades read prices from `PriceCache`.
 - **Single process:** `PriceCache` is process-local, so uvicorn must run with one worker.
 - **Known concerns (CONCERNS.md):** `MASSIVE_POLL_INTERVAL` can go as low as 1s, which exceeds the free-tier limit; SSE ticks are sent even when nothing changed; the test-module table in `MARKET_DATA_SUMMARY.md` is stale; there is no CI running ruff/pytest.
@@ -108,18 +109,26 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Build the entire PLAN.md as the v1 milestone | User request: "everything as described in planning/PLAN.md" | — Pending |
-| Keep the existing market subsystem as validated; integrate rather than rewrite | Complete, tested, and reviewed (all 15 review findings fixed) | — Pending |
-| SSE over WebSockets; static Next.js export served by FastAPI | One-way push is enough; single origin, single port | — Pending |
-| Non-streaming chat with structured output and auto-execution | Must parse the complete JSON before executing; it's a zero-stakes simulated environment and makes a fluid agentic demo | — Pending |
-| Failed-action notes are templated by the backend, not a second LLM call | The LLM writes its message before actions run; a template is cheap and deterministic | — Pending |
-| Tracked tickers = watchlist ∪ held positions | Removing a held ticker from the watchlist must not break valuation | — Pending |
-| GSD model profile: quality; parallel execution with worktrees | User settings choice | — Pending |
+| Build the entire PLAN.md as the v1 milestone | User request: "everything as described in planning/PLAN.md" | ✓ Good: shipped v1 in 3 vertical slices over 5 days |
+| Keep the existing market subsystem as validated; integrate rather than rewrite | Complete, tested, and reviewed (all 15 review findings fixed) | ✓ Good: integrated unchanged apart from the FastAPI/Starlette bump |
+| SSE over WebSockets; static Next.js export served by FastAPI | One-way push is enough; single origin, single port | ✓ Good: one origin, no CORS, reconnect via `retry: 1000` |
+| Non-streaming chat with structured output and auto-execution | Must parse the complete JSON before executing; it's a zero-stakes simulated environment and makes a fluid agentic demo | ✓ Good: shipped in Phase 3 |
+| Failed-action notes are templated by the backend, not a second LLM call | The LLM writes its message before actions run; a template is cheap and deterministic | ✓ Good: shipped in Phase 3 |
+| Tracked tickers = watchlist ∪ held positions | Removing a held ticker from the watchlist must not break valuation | ✓ Good: verified in Phase 2 |
+| GSD model profile: quality; parallel execution with worktrees | User settings choice | ✓ Good: parallel worktrees worked; frequent merges |
 | Node 22 (not PLAN.md's original Node 20) for the frontend build stage and local dev | Node 20 reached end-of-life in April 2026; user decision 2026-10-23 (PLAN.md §11 updated to match) | ✓ Shipped in Phase 1 |
 | Bump to FastAPI 0.162 / Starlette 1.10 before building on the backend | Current Starlette 1.x; all 139 market tests pass unchanged | ✓ Phase 1 |
 | One shared `state_lock` (asyncio.Lock) per app for every mutation | Watchlist, snapshots, and Phase 2 trade/reset services must serialize against each other | ✓ Phase 1; Phase 2 must reuse it |
 | `NotFoundError` subclasses `DomainError` | Phase 3 chat actions can catch one type for every business failure | ✓ Phase 1 |
 | One authoritative ticker rule per side (`app/tickers.py`, `frontend/src/api/ticker.ts`), non-ASCII rejected before uppercasing | Prevents "aß" folding to "ASS"; no duplicated regexes | ✓ Phase 1 |
+| Trade quantity: StrictFloat at the route, capped at 1,000,000,000 on the raw value before rounding; oversized orders rejected, never clamped | 1e24 overflowed Decimal rounding into a 500; the Phase 3 executor needs every quantity failure to be a `DomainError` | ✓ Phase 2 (02-07) |
+| Trade error messages carry "need $X, have $Y" / "need N, have M" fragments | Phase 3 builds templated failure notes from them without a second LLM call | ✓ Phase 2 |
+| `POST /api/reset` keeps PLAN §8 exactly: no body, no headers, no 400 path | User decision U-1; E2E reset calls need no special body | ✓ Phase 2 |
+| P&L chart is a BaselineSeries at $10,000 and polls `/api/portfolio/history` every 30 s | Matches the backend snapshot timer so points appear without a trade; `/api/portfolio` itself is never polled | ✓ Phase 2 |
+| `litellm==1.106.2` exact pin; OpenRouter routing `require_parameters: True`, `allow_fallbacks: False` | Supply-chain safety (avoid the compromised 1.82.7/1.82.8); keep requests on a provider that honors strict `response_format` | ✓ Phase 3 |
+| Lenient envelope parse with per-item `StrictStr`/`StrictFloat` validation; services enforce all semantics | A malformed item fails alone instead of failing the whole reply | ✓ Phase 3 |
+| `POST /api/reset` takes the chat turn lock before the state lock (CR-01) | A reset mid-turn must not let the turn's trades land in the fresh account | ✓ Phase 3 (836898b) |
+| Panel pairs stack below `lg` (1024px), not `md` | At 768px side-by-side halves were too cramped for the positions table | ✓ Quick task 261029-vpc |
 
 ## Evolution
 
@@ -139,4 +148,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-27 after Phase 1*
+*Last updated: 2026-10-30 after v1 milestone*

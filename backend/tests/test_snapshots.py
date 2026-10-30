@@ -9,9 +9,11 @@ from contextlib import closing
 
 import pytest
 
+from app import snapshots
 from app.db import Database, now_iso
 from app.market import PriceCache
 from app.snapshots import SNAPSHOT_INTERVAL, SnapshotRecorder, portfolio_value, run_snapshot_loop
+from app.valuation import value_portfolio
 
 ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
@@ -83,6 +85,69 @@ class TestRecorder:
             assert snapshot_rows(db) == []
         await task
         assert len(snapshot_rows(db)) == 1
+
+
+def insert_position(db: Database, ticker: str, quantity: float, avg_cost: float) -> None:
+    with closing(sqlite3.connect(db.path)) as conn:
+        conn.execute(
+            "INSERT INTO positions (id, ticker, quantity, avg_cost, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), ticker, quantity, avg_cost, now_iso()),
+        )
+        conn.commit()
+
+
+class TestInsertSnapshot:
+    """insert_snapshot writes on the caller's open transaction and takes no lock."""
+
+    def test_inserts_one_row_and_returns_the_valuation(self, db):
+        insert_position(db, "AAPL", 0.0005, 250.0)
+        insert_position(db, "PYPL", 1.5, 1.67)
+        cache = PriceCache()
+        cache.update("AAPL", 250.0)
+        with db.transaction() as conn:
+            value = snapshots.insert_snapshot(conn, cache)
+        positions = [("AAPL", 0.0005, 250.0), ("PYPL", 1.5, 1.67)]
+        expected = value_portfolio(10000.0, positions, cache.get_price)["total_value"]
+        assert value == expected == 10002.64  # 10000 + 0.13 + 2.51
+        rows = snapshot_rows(db)
+        assert len(rows) == 1
+        assert rows[0][2] == value
+        assert uuid.UUID(rows[0][0]) and rows[0][1] == "default"
+        assert ISO_RE.match(rows[0][3])
+
+    def test_no_positions_equals_cash(self, db):
+        with db.transaction() as conn:
+            assert snapshots.insert_snapshot(conn, PriceCache()) == 10000.0
+
+    def test_rolled_back_transaction_keeps_no_row(self, db):
+        with pytest.raises(RuntimeError):
+            with db.transaction() as conn:
+                snapshots.insert_snapshot(conn, PriceCache())
+                raise RuntimeError("abort")
+        assert snapshot_rows(db) == []
+
+    async def test_recorder_and_trade_snapshot_in_one_second_both_persist(self, db, monkeypatch):
+        monkeypatch.setattr("app.snapshots.now_iso", lambda: "2026-10-09T14:03:22Z")
+        cache = PriceCache()
+        await SnapshotRecorder(db, cache, asyncio.Lock()).record()
+        with db.transaction() as conn:
+            snapshots.insert_snapshot(conn, cache)
+        rows = snapshot_rows(db)
+        assert len(rows) == 2
+        assert rows[0][0] != rows[1][0]
+        assert rows[0][3] == rows[1][3] == "2026-10-09T14:03:22Z"
+
+    def test_portfolio_value_delegates_to_value_portfolio(self):
+        # 0.0005 x 250.00 = 0.125 exactly: half-up gives 0.13 (float round gives 0.12)
+        positions = [("AAPL", 0.0005, 250.0)]
+        assert portfolio_value(0.0, positions, lambda t: 250.0) == 0.13
+        mix = [("A", 0.0125, 190.5), ("B", 1.5, 1.67), ("C", 0.5, 10.0)]
+        prices = {"A": 190.5, "C": 10.01}
+        assert (
+            portfolio_value(100.0, mix, prices.get)
+            == value_portfolio(100.0, mix, prices.get)["total_value"]
+        )
 
 
 class FlakyRecorder:

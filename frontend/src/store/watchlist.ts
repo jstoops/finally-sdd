@@ -18,9 +18,15 @@ interface WatchlistState {
   loaded: boolean;
   loadError: string | null;
   selected: string | null;
+  /** Held position tickers, pushed in by Terminal; a held selection survives watchlist changes. */
+  held: string[];
   /** Store entries in server order and reconcile the selection. */
   setEntries: (entries: WatchlistEntry[]) => void;
+  /** Store the held tickers and reconcile the selection. */
+  setHeld: (tickers: string[]) => void;
   select: (ticker: string) => void;
+  /** Drop the selection, so the next setEntries picks the first ticker (reset, PF-10). */
+  clearSelection: () => void;
   loadWatchlist: () => Promise<void>;
   /** POST /api/watchlist. Resolves to an inline error message, or null on success. */
   addTicker: (raw: string) => Promise<string | null>;
@@ -33,15 +39,27 @@ export const useWatchlist = create<WatchlistState>()((set, get) => ({
   loaded: false,
   loadError: null,
   selected: null,
+  held: [],
   setEntries: (entries) =>
     set({
       entries,
       selected: nextSelection(
         entries.map((e) => e.ticker),
         get().selected,
+        get().held,
+      ),
+    }),
+  setHeld: (tickers) =>
+    set({
+      held: tickers,
+      selected: nextSelection(
+        get().entries.map((e) => e.ticker),
+        get().selected,
+        tickers,
       ),
     }),
   select: (ticker) => set({ selected: ticker }),
+  clearSelection: () => set({ selected: null }),
   loadWatchlist: async () => {
     try {
       const data = await apiFetch<WatchlistResponse>("/api/watchlist");

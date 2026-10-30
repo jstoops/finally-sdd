@@ -36,3 +36,15 @@ class TickerTracker:
         for ticker in sorted(current - desired):
             await self._source.remove_ticker(ticker)
             logger.info("Tracker: removed %s", ticker)
+
+    async def reconcile_quietly(self, context: str) -> None:
+        """Reconcile after a committed change, logging instead of raising on failure.
+
+        The database change has already committed, so a source error must not turn
+        it into a failed request. The next reconcile repairs the source's ticker set.
+        `context` names the change for the log, e.g. "adding PYPL" or "sell PYPL".
+        """
+        try:
+            await self.reconcile()
+        except Exception:
+            logger.exception("Tracker: reconcile failed after %s", context)

@@ -1,7 +1,16 @@
 import type { UTCTimestamp } from "lightweight-charts";
 import { describe, expect, it } from "vitest";
 
-import { CHART_THEME, formatLocalTime, isNewer, toSeriesData } from "@/domain/chart";
+import {
+  CHART_THEME,
+  formatLocalTime,
+  hexToRgba,
+  isNewer,
+  PNL_TOKEN_FALLBACK,
+  pnlSeriesColors,
+  readColorToken,
+  toSeriesData,
+} from "@/domain/chart";
 
 describe("toSeriesData", () => {
   it("maps Unix float seconds to chart times unchanged", () => {
@@ -72,5 +81,67 @@ describe("CHART_THEME", () => {
     expect(CHART_THEME.text).toBe("#8b949e");
     expect(CHART_THEME.grid).toBe("rgba(48,54,61,0.6)");
     expect(CHART_THEME.openLine).toBe("#8b949e");
+  });
+});
+
+function styleOf(value: string): Pick<CSSStyleDeclaration, "getPropertyValue"> {
+  return { getPropertyValue: () => value };
+}
+
+describe("readColorToken", () => {
+  it("returns the trimmed hex value of the property", () => {
+    expect(readColorToken(styleOf(" #00ff00 "), "--color-up", "#123456")).toBe("#00ff00");
+  });
+
+  it("accepts a 3-digit hex color as written", () => {
+    expect(readColorToken(styleOf("#0f0"), "--color-up", "#123456")).toBe("#0f0");
+  });
+
+  it.each(["", "   ", "red", "oklch(0.7 0.2 150)", "#12345", "#gggggg"])(
+    "falls back for %j",
+    (value) => {
+      expect(readColorToken(styleOf(value), "--color-up", "#123456")).toBe("#123456");
+    },
+  );
+
+  it("reads the named property", () => {
+    const getPropertyValue = (name: string) => (name === "--color-down" ? "#ff0000" : "");
+    expect(readColorToken({ getPropertyValue }, "--color-down", "#123456")).toBe("#ff0000");
+    expect(readColorToken({ getPropertyValue }, "--color-up", "#123456")).toBe("#123456");
+  });
+});
+
+describe("hexToRgba", () => {
+  it("converts 6-digit hex with no spaces", () => {
+    expect(hexToRgba("#00ff00", 0.28)).toBe("rgba(0,255,0,0.28)");
+  });
+
+  it("expands 3-digit hex", () => {
+    expect(hexToRgba("#0f0", 0.05)).toBe("rgba(0,255,0,0.05)");
+  });
+});
+
+describe("pnlSeriesColors", () => {
+  it("derives the six baseline colors from the up and down colors", () => {
+    expect(pnlSeriesColors("#00ff00", "#ff0000")).toEqual({
+      topLineColor: "#00ff00",
+      topFillColor1: "rgba(0,255,0,0.28)",
+      topFillColor2: "rgba(0,255,0,0.05)",
+      bottomLineColor: "#ff0000",
+      bottomFillColor1: "rgba(255,0,0,0.05)",
+      bottomFillColor2: "rgba(255,0,0,0.28)",
+    });
+  });
+
+  it("reproduces the previous default look from the token fallbacks", () => {
+    expect(PNL_TOKEN_FALLBACK).toEqual({ up: "#22c55e", down: "#ef4444" });
+    expect(pnlSeriesColors(PNL_TOKEN_FALLBACK.up, PNL_TOKEN_FALLBACK.down)).toEqual({
+      topLineColor: "#22c55e",
+      topFillColor1: "rgba(34,197,94,0.28)",
+      topFillColor2: "rgba(34,197,94,0.05)",
+      bottomLineColor: "#ef4444",
+      bottomFillColor1: "rgba(239,68,68,0.05)",
+      bottomFillColor2: "rgba(239,68,68,0.28)",
+    });
   });
 });

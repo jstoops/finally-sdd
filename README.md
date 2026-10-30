@@ -2,7 +2,7 @@
 
 An AI-powered trading terminal: live streaming prices, a simulated $10,000 portfolio, and an LLM copilot that analyzes positions and executes trades through chat. Built entirely by coding agents.
 
-> **Status:** the live market terminal is in progress: streaming watchlist, container, and start/stop scripts. Trading, the portfolio views and AI chat are still to be built. See [`planning/PLAN.md`](planning/PLAN.md) for the full spec.
+> **Status:** v1 is complete. Every feature in [`planning/PLAN.md`](planning/PLAN.md) is built: the live market terminal, manual trading with a live portfolio, and the AI copilot. Backend, frontend and Playwright E2E test suites are included.
 
 ## Quick start
 
@@ -24,11 +24,11 @@ powershell -ExecutionPolicy Bypass -File scripts\stop_windows.ps1
 
 `-ExecutionPolicy Bypass` applies to that one invocation only. The scripts never change your execution policy or any other system setting.
 
-- `--build` rebuilds the image (after pulling new code). The Windows script also accepts `-Build`.
+- `--build` rebuilds the image. The Windows script also accepts `-Build`. Without it, the scripts reuse an existing `finally:latest` image, so **pass `--build` after pulling or changing code**.
 - `--no-open` skips opening the browser. The Windows script also accepts `-NoOpen`.
 - On first run the start script copies `.env.example` to `.env`. The market simulator needs no keys; AI chat needs `OPENROUTER_API_KEY` in `.env`.
 - Both scripts are safe to run more than once. If the app is not healthy within 60 seconds, the start script prints the last 50 log lines and exits with an error.
-- Your data (watchlist, and later positions and chat) lives in the `finally-data` Docker volume. The stop scripts keep it. Only `docker volume rm finally-data` deletes it.
+- Your data (cash, watchlist, positions, trades, P&L history and chat) lives in the `finally-data` Docker volume. The stop scripts keep it. Only `docker volume rm finally-data` deletes it.
 
 Without the scripts: `docker compose up -d --build --wait`, then `docker compose down`.
 
@@ -51,13 +51,14 @@ The dot in the header shows the live price stream:
 
 It turns green again on its own once the server is back.
 
-## Features (planned)
+## Features
 
-- Live prices over SSE with flash animations and sparklines
-- Market orders with instant fills — no fees, no login
-- Portfolio heatmap, P&L chart and positions table
-- AI chat assistant that trades and manages the watchlist
-- One-click account reset
+- **Watchlist:** live prices over SSE with green/red flashes, Chg % since session open and sparklines. Add or remove tickers (up to 50).
+- **Main chart:** click a ticker to chart it, starting from the last ~5 minutes of prices and extended live.
+- **Trading:** market orders from the trade bar with instant fills at the current price. No fees, no login, fractional shares. Errors show inline, and a trade history sits under the bar.
+- **Portfolio:** the header shows total value, cash and P&L. A positions table, a P&L-colored heatmap and a portfolio-value chart all update live.
+- **AI copilot:** ask FinAlly about your portfolio, or tell it to trade and edit the watchlist. Actions run automatically and show inline as executed or failed. Without `OPENROUTER_API_KEY` the chat panel says it is not configured; `LLM_MOCK=true` gives deterministic replies with no key.
+- **Reset:** one click (after a confirmation) restores $10,000 and the default watchlist, and clears positions, trades, P&L history and chat.
 
 ## Stack
 
@@ -93,13 +94,24 @@ npm --prefix frontend test                       # frontend unit tests
 uv run market_data_demo.py                       # terminal demo of the price simulator (from backend/)
 ```
 
+End-to-end tests (Playwright) run in Docker against the real app image with `LLM_MOCK=true`. They need no API keys and use a throwaway database. From the repo root:
+
+```bash
+docker compose -f test/docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from playwright
+docker compose -f test/docker-compose.test.yml down -v
+```
+
+Reports land in `test/playwright-report/` and `test/test-results/` (both gitignored).
+
+To check the real LLM path, `uv run --directory backend python chat_llm_spike.py` makes one paid call to OpenRouter (Cerebras) and validates the structured reply. It needs `OPENROUTER_API_KEY`.
+
 ## Configuration
 
 Set in `.env` at the project root (copy `.env.example`):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `OPENROUTER_API_KEY` | — | Enables AI chat |
+| `OPENROUTER_API_KEY` | — | Enables AI chat (without it, chat returns "not configured") |
 | `MASSIVE_API_KEY` | empty | Real market data via Massive (Polygon.io); simulator if unset |
 | `MASSIVE_POLL_INTERVAL` | `15` | Seconds between Massive polls |
 | `LLM_MOCK` | `false` | Deterministic mock LLM responses for testing |
@@ -109,11 +121,12 @@ Set in `.env` at the project root (copy `.env.example`):
 ## Layout
 
 ```
-backend/    FastAPI uv project (API, SQLite, market data)
+backend/    FastAPI uv project (API, SQLite, market data, trading, LLM chat)
 frontend/   Next.js app, built as a static export served by FastAPI
 scripts/    start/stop scripts wrapping docker compose (macOS/Linux and Windows)
-planning/   Specs and agent docs
-test/       Playwright E2E tests (to come)
+planning/   Specs and agent docs (PLAN.md is the contract)
+.planning/  GSD planning state: roadmap, milestones and archived phase records
+test/       Playwright E2E suite and docker-compose.test.yml
 Dockerfile, docker-compose.yml   single-container build and run config
 ```
 

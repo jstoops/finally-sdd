@@ -646,7 +646,7 @@ Keys follow PLAN §8 verbatim. Add a backend exact-key test (`set(body) == {...}
 | A4 | Server rounds `avg_cost` and `weight` to 4dp on the wire; `avg_cost` is stored at full precision | Pattern 2/3 | PF-01 only fixes `*_percent` to 4dp; a different choice changes displayed values only beyond 2dp |
 | A5 | `TradeRequest.side: str` validated in the service (400), not `Literal` (422) | Pattern 5 | PLAN §8 doesn't say whether a bad side is a business or a body error; tests must match the choice |
 | A6 | Squarify label threshold and the neutral color `#30363d` for ~0% P&L | Pattern F4 | Visual only |
-| A7 | The reset route should require a JSON content type, as a CSRF guard (see Security) | Security | Not in PLAN or requirements; Phase 3 Playwright `request.post('/api/reset')` must then send `data: {}` |
+| A7 | ~~The reset route should require a JSON content type, as a CSRF guard (see Security)~~ **Superseded by user decision U-1 (2026-10-27):** `POST /api/reset` keeps the PLAN §8 contract exactly; any POST returns 200 `{"status": "ok"}` with no Content-Type or body precondition | Security | Not adopted; E2E reset calls need no special body or header |
 
 ## Open Questions
 
@@ -748,7 +748,7 @@ No framework installs are needed.
 | V4 Access Control | no (single user) | `user_id = 'default'` hardcoded; never take `user_id` from the request |
 | V5 Input Validation | **yes** | `normalize_ticker` (regex + ASCII), service checks for finite or positive qty and `side`, Pydantic types for 422, parameterized SQL only |
 | V6 Cryptography | no | No secrets in this phase; `uuid4` for ids is not a security token |
-| V13 API / web service | yes | JSON content type on state-changing routes (see CSRF row) |
+| V13 API / web service | yes | Model-bodied state-changing routes (trade, watchlist) parse only JSON; the body-less reset route stays open by user decision U-1 (see CSRF row) |
 
 ### Known Threat Patterns for this stack
 | Pattern | STRIDE | Standard Mitigation |
@@ -757,7 +757,7 @@ No framework installs are needed.
 | Non-finite or huge quantity (`NaN`, `Infinity`, `1e400`) | Tampering / DoS of the math | `math.isfinite` + `> 0` after rounding in the service (Pitfall 3, probed) |
 | Race to overspend (parallel requests) | Tampering | `state_lock` + `BEGIN IMMEDIATE`; concurrency test |
 | Client-supplied price | Tampering | The request has no price field; the fill comes from `PriceCache` under the lock |
-| Cross-site request to `POST /api/reset` | Tampering (CSRF) | Probed this session: FastAPI parses a model body only for `application/json`, so a cross-site `text/plain` POST to the **trade** route gets 422 [VERIFIED: TestClient probe, "trade text/plain 422"]. A body-less **reset** route returned 200 to a `text/plain` POST [VERIFIED: probe, "reset text/plain 200"], so any web page the user visits could reset the account. Mitigation: have the reset route reject requests without `Content-Type: application/json` (400 or 415). `apiFetch` always sends that header [VERIFIED: frontend/src/api/client.ts:37-44]. Cross-origin JS can't send it without a CORS preflight, which fails because CORS is off outside dev. The impact is low (fake money), so this is a recommendation (A7). Phase 3's Playwright reset calls must send `data: {}` |
+| Cross-site request to `POST /api/reset` | Tampering (CSRF) | Probed this session: FastAPI parses a model body only for `application/json`, so a cross-site `text/plain` POST to the **trade** route gets 422 [VERIFIED: TestClient probe, "trade text/plain 422"]. A body-less **reset** route returned 200 to a `text/plain` POST [VERIFIED: probe, "reset text/plain 200"], so any web page the user visits could reset the account. **Disposition (user decision U-1, 2026-10-27): accepted.** The reset route keeps the PLAN §8 contract with no content-type guard; the impact is low (simulated money, single local user), and the in-app button asks `window.confirm` (recorded as accepted threat T-02-13 in 02-06-PLAN.md) |
 | XSS through ticker or messages | Tampering | React escapes text; no `dangerouslySetInnerHTML`; tickers are regex-constrained |
 | Information leak in 500s | Information disclosure | Business errors are 400s with curated text; unexpected exceptions keep FastAPI's generic 500; log with `logger.exception` |
 

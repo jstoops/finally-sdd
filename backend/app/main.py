@@ -20,13 +20,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api import create_system_router, create_watchlist_router
+from .api import (
+    create_chat_router,
+    create_portfolio_router,
+    create_system_router,
+    create_watchlist_router,
+)
+from .chat import ChatService, LLMClient, MockLLMClient, OpenRouterLLMClient, create_llm_client
 from .config import Settings, configure_logging
 from .db import Database
 from .errors import error_handlers
 from .market import MarketDataSource, PriceCache, create_market_data_source, create_stream_router
+from .portfolio import PortfolioService
 from .snapshots import SNAPSHOT_INTERVAL, SnapshotRecorder, run_snapshot_loop
 from .tracker import TickerTracker
+from .trading import TradeService
 from .watchlist import WatchlistService
 
 logger = logging.getLogger(__name__)
@@ -39,10 +47,14 @@ def create_app(
     *,
     source_factory: SourceFactory | None = None,
     snapshot_interval: float = SNAPSHOT_INTERVAL,
+    llm_client: LLMClient | None = None,
 ) -> FastAPI:
     """Build the app. Objects are inert until lifespan runs (PLAN §3 startup order).
 
     `snapshot_interval` is a test seam; production uses the 30-second default.
+    `llm_client` is a test seam like `source_factory`: when given it answers every
+    chat; otherwise `create_llm_client` picks the mock (LLM_MOCK=true, even with a
+    key), then OpenRouter (OPENROUTER_API_KEY), and with neither chat returns 503.
     """
     configure_logging()
     # Settings.from_env loads .env BEFORE the market factory reads MASSIVE_API_KEY
@@ -50,16 +62,30 @@ def create_app(
     cache = PriceCache()
     source = (source_factory or create_market_data_source)(cache)
     db = Database(settings.db_path)
-    # One lock serializes every state mutation: watchlist now, trades and reset in Phase 2
+    # One lock serializes every state mutation: watchlist edits, trades, reset and snapshots.
+    # asyncio.Lock is not reentrant: never call a lock-taking method while holding it.
     state_lock = asyncio.Lock()
     tracker = TickerTracker(db, source)
     watchlist = WatchlistService(db, cache, tracker, state_lock)
     recorder = SnapshotRecorder(db, cache, state_lock)
+    portfolio = PortfolioService(db, cache, tracker, state_lock)
+    trade_service = TradeService(db, cache, tracker, portfolio, state_lock)
+    # The client is chosen once: override, then the mock (checked before any key), then
+    # OpenRouter, else none. Chat gets the services, never the lock: they take it themselves.
+    chat_client = llm_client if llm_client is not None else create_llm_client(settings)
+    chat_service = ChatService(db, portfolio, watchlist, trade_service, chat_client)
+    logger.info("App: chat mode %s", _chat_mode(llm_client, chat_client))  # never the key
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("App: database at %s", Path(db.path).resolve())
         await asyncio.to_thread(db.init)
+        if isinstance(chat_client, OpenRouterLLMClient):
+            # OPS-01: the heavy litellm import happens here, off the loop, not on first chat
+            try:
+                await asyncio.to_thread(chat_client.warm)
+            except Exception:
+                logger.exception("App: LLM warm-up failed; chat will retry on first use")
         tracked = await asyncio.to_thread(db.tracked_tickers)
         await source.start(tracked)  # PLAN §6: watchlist ∪ held positions
         task: asyncio.Task | None = None
@@ -84,6 +110,9 @@ def create_app(
     app.state.source = source
     app.state.db = db
     app.state.state_lock = state_lock
+    app.state.trade_service = trade_service
+    app.state.portfolio_service = portfolio
+    app.state.chat_service = chat_service
 
     # D-13: CORS only for the `next dev` loop; never enabled by default or in Docker.
     if settings.dev_cors_origin:
@@ -98,10 +127,24 @@ def create_app(
     # No GZip middleware: it would buffer the SSE stream.
     app.include_router(create_stream_router(cache))
     app.include_router(create_watchlist_router(watchlist))
+    # Reset waits on the chat turn lock, so a reply never runs against the fresh account.
+    app.include_router(create_portfolio_router(trade_service, portfolio, chat_service.turn_lock))
+    app.include_router(create_chat_router(chat_service))
     app.include_router(create_system_router())
     install_api_not_found(app)  # after every /api router
     mount_static(app, settings.static_dir)  # last: "/" would shadow anything after it
     return app
+
+
+def _chat_mode(override: LLMClient | None, client: LLMClient | None) -> str:
+    """The chat mode name for the startup log: custom, mock, openrouter or disabled."""
+    if override is not None:
+        return "custom"
+    if isinstance(client, MockLLMClient):
+        return "mock"
+    if isinstance(client, OpenRouterLLMClient):
+        return "openrouter"
+    return "disabled"
 
 
 def install_api_not_found(app: FastAPI) -> None:

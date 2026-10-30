@@ -21,6 +21,11 @@ interface PricesState {
    */
   ingestFrame: (frame: PriceFrame) => void;
   setStatus: (status: StreamStatus) => void;
+  /**
+   * Empty every sparkline (after a reset, PF-10). `lastTs` is kept, so a frame already seen
+   * never re-appends; the lines refill from the next new ticks.
+   */
+  clearSparklines: () => void;
 }
 
 export const usePrices = create<PricesState>()((set) => ({
@@ -48,6 +53,7 @@ export const usePrices = create<PricesState>()((set) => ({
       return { ticks, lastTs, spark };
     }),
   setStatus: (status) => set({ status }),
+  clearSparklines: () => set({ spark: {} }),
 }));
 
 /**

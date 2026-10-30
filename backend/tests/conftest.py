@@ -1,22 +1,31 @@
-"""Shared pytest fixtures: settings, app builders, a live client and a fake market source.
+"""Shared pytest fixtures: settings, app builders, a live client, a fake market source
+and a fake LLM client.
 
 Fixtures only; tests never import this module directly.
 """
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
+import json
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.chat.mock import GREETING
 from app.config import Settings
+from app.db import Database
 from app.main import create_app
 from app.market import MarketDataSource, PriceCache
 from app.market.simulator import SimulatorDataSource
+from app.portfolio import PortfolioService
+from app.tracker import TickerTracker
+from app.trading import TradeService
+from app.watchlist import WatchlistService
 
 
 class RecordingSource(MarketDataSource):
@@ -51,6 +60,27 @@ class RecordingSource(MarketDataSource):
 
     def get_tickers(self) -> list[str]:
         return list(self._tickers)
+
+
+class FakeLLMClient:
+    """Fake LLMClient: returns scripted raw replies in order, or raises `error`.
+
+    Every `complete` call records a copy of its messages in `calls`. With no
+    scripted reply left it returns the JSON greeting envelope.
+    """
+
+    def __init__(self, replies: list[str] | None = None, error: Exception | None = None) -> None:
+        self.replies = list(replies or [])
+        self.error = error
+        self.calls: list[list[dict[str, str]]] = []
+
+    async def complete(self, messages: list[dict[str, str]]) -> str:
+        self.calls.append([dict(m) for m in messages])
+        if self.error is not None:
+            raise self.error
+        if self.replies:
+            return self.replies.pop(0)
+        return json.dumps({"message": GREETING, "trades": [], "watchlist_changes": []})
 
 
 def simulator_factory(cache: PriceCache) -> MarketDataSource:
@@ -98,6 +128,53 @@ def client(make_app) -> Iterator[TestClient]:
 
 
 @pytest.fixture
+def fake_llm() -> type[FakeLLMClient]:
+    """The FakeLLMClient class: call it to build a scripted LLM client."""
+    return FakeLLMClient
+
+
+@pytest.fixture
 def recording_source() -> type[RecordingSource]:
     """The RecordingSource class: call it to build a fresh fake source."""
     return RecordingSource
+
+
+@dataclasses.dataclass
+class TradeEnv:
+    """Services wired as in `create_app`, on one database, cache, source and shared lock."""
+
+    db: Database
+    cache: PriceCache
+    source: RecordingSource
+    tracker: TickerTracker
+    lock: asyncio.Lock
+    portfolio: PortfolioService
+    trades: TradeService
+    watchlist: WatchlistService
+
+    def price(self, ticker: str, value: float) -> None:
+        """Set the cached price of `ticker` (the source never writes the cache)."""
+        self.cache.update(ticker, value)
+
+
+@pytest.fixture
+async def trade_env(tmp_path) -> AsyncIterator[TradeEnv]:
+    """A seeded database plus every trading service on one shared `asyncio.Lock`."""
+    db = Database(str(tmp_path / "trade.db"))
+    db.init()
+    cache = PriceCache()
+    source = RecordingSource()
+    await source.start(db.tracked_tickers())
+    tracker = TickerTracker(db, source)
+    lock = asyncio.Lock()
+    portfolio = PortfolioService(db, cache, tracker, lock)
+    yield TradeEnv(
+        db=db,
+        cache=cache,
+        source=source,
+        tracker=tracker,
+        lock=lock,
+        portfolio=portfolio,
+        trades=TradeService(db, cache, tracker, portfolio, lock),
+        watchlist=WatchlistService(db, cache, tracker, lock),
+    )

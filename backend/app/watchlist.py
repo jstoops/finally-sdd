@@ -63,7 +63,7 @@ class WatchlistService:
                 logger.info("Watchlist: added %s", ticker)
             # On every add, not only on creation: reconcile is idempotent, so a re-add
             # also heals a source that failed to pick up an earlier, committed add.
-            await self._reconcile("adding", ticker)  # the simulator prices it right away
+            await self._tracker.reconcile_quietly(f"adding {ticker}")  # priced right away
             return self._entry(*row), created
 
     async def remove(self, raw: str) -> None:
@@ -74,20 +74,10 @@ class WatchlistService:
             if not deleted:
                 raise NotFoundError(f"{ticker} is not on your watchlist")
             logger.info("Watchlist: removed %s", ticker)
-            await self._reconcile("removing", ticker)  # a held ticker stays tracked
+            # A held ticker stays tracked
+            await self._tracker.reconcile_quietly(f"removing {ticker}")
 
     # --- Internals ---
-
-    async def _reconcile(self, action: str, ticker: str) -> None:
-        """Reconcile tracked tickers after a committed change, without failing the request.
-
-        The database change is already committed, so a source error must not turn it
-        into a 500. The next mutation's reconcile repairs the source's ticker set.
-        """
-        try:
-            await self._tracker.reconcile()
-        except Exception:
-            logger.exception("Tracker: reconcile failed after %s %s", action, ticker)
 
     def _add_tx(self, ticker: str) -> tuple[tuple[str, str], bool]:
         with self._db.transaction() as conn:
