@@ -97,7 +97,9 @@ class TestUnconfigured:
             res = client.post("/api/chat", json={"message": "hello"})
             assert res.status_code == 503
             assert res.json() == {"error": NOT_CONFIGURED}
-            assert NOT_CONFIGURED == "AI assistant is not configured. Set OPENROUTER_API_KEY in .env."
+            assert (
+                NOT_CONFIGURED == "AI assistant is not configured. Set OPENROUTER_API_KEY in .env."
+            )
             assert chat_row_count(client) == 0
 
     def test_two_concurrent_posts_are_both_503(self, build):
