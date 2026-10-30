@@ -6,6 +6,17 @@ FinAlly (Finance Ally) is a single-container AI trading workstation. It streams 
 
 The full product specification is `planning/PLAN.md`. This document captures the project context; PLAN.md stays the detailed contract for API shapes, schema, and behavior.
 
+## Current State
+
+**Shipped: v1 MVP (2026-10-30).** Every PLAN.md feature ships in one container: the live market terminal, manual trading with a live portfolio, and the AI copilot (real model or `LLM_MOCK`), with backend (577), frontend (347) and Playwright E2E (17) suites green. The milestone audit scored 64/64 requirements, 10/10 integration and 7/7 flows, with status tech_debt. See `.planning/MILESTONES.md`.
+
+## Next Milestone Goals
+
+Not defined yet; start with `/gsd-new-milestone`. Candidates:
+- Pay down the v1 tech debt listed under Active (stale-image start scripts, volume naming, the watchlist load race, portfolio load-error states, 768px ticker clipping)
+- Close backlog 999.1 (macOS/Linux start-script browser launch) and Phase 3 Nyquist validation
+- Stretch: cloud deployment (PLAN §11 App Runner/Render), CI running ruff, pytest, vitest and E2E
+
 ## Core Value
 
 A user can open one URL, watch prices stream live, and trade a simulated portfolio, either manually or by asking the AI copilot, with every number (cash, positions, P&L) staying correct and updating in real time.
@@ -55,6 +66,14 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 **UI polish**
 - [ ] Watchlist column clips ticker symbols to one letter at 768px width (found in quick task 261029-vpc; predates it)
 
+**v1 tech debt (from `milestones/v1-MILESTONE-AUDIT.md`)**
+- [ ] `loadWatchlist` sequence guard so a slow GET can't overwrite a newer add/remove (Phase 1 IN-02)
+- [ ] Positions table and heatmap show a load error instead of the empty state when `/api/portfolio` fails (Phase 2 WR-04)
+- [ ] Guard the post-commit `view_sync` so a committed fill never reports 500/failed (Phase 2 IN-01)
+- [ ] Concurrency test for read isolation of `GET /api/portfolio` and `/history` under concurrent trades
+- [ ] Reconcile Phase 3 Nyquist validation (`03-VALIDATION.md` still draft)
+- [ ] CI that runs ruff, pytest, vitest and E2E (no CI runs them today)
+
 ### Out of Scope
 
 - Authentication, signup, multi-user — single hardcoded `"default"` user by design; the schema keeps `user_id` for the future
@@ -69,7 +88,7 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 
 ## Context
 
-- **Current state (after Phase 3):** every PLAN.md feature ships in one container: live terminal, manual trading, the AI copilot (real model or `LLM_MOCK`) that trades and edits the watchlist, and the full test pyramid (577 backend, 347 frontend, 17 E2E). All roadmap phases are complete; open items are minor packaging/ops and UI polish.
+- **Current state (v1 shipped 2026-10-30, ~3.3k backend + ~8k frontend LOC):** every PLAN.md feature ships in one container: live terminal, manual trading, the AI copilot (real model or `LLM_MOCK`) that trades and edits the watchlist, and the full test pyramid (577 backend, 347 frontend, 17 E2E). All roadmap phases are complete; open items are minor packaging/ops and UI polish.
 - **Established patterns to follow:** router factories (`create_*_router(deps)`) with no module-level state; dependencies built in `lifespan` and injected; blocking work kept off the event loop; only sources write to `PriceCache`; trades read prices from `PriceCache`.
 - **Single process:** `PriceCache` is process-local, so uvicorn must run with one worker.
 - **Known concerns (CONCERNS.md):** `MASSIVE_POLL_INTERVAL` can go as low as 1s, which exceeds the free-tier limit; SSE ticks are sent even when nothing changed; the test-module table in `MARKET_DATA_SUMMARY.md` is stale; there is no CI running ruff/pytest.
@@ -90,13 +109,13 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Build the entire PLAN.md as the v1 milestone | User request: "everything as described in planning/PLAN.md" | — Pending |
-| Keep the existing market subsystem as validated; integrate rather than rewrite | Complete, tested, and reviewed (all 15 review findings fixed) | — Pending |
-| SSE over WebSockets; static Next.js export served by FastAPI | One-way push is enough; single origin, single port | — Pending |
-| Non-streaming chat with structured output and auto-execution | Must parse the complete JSON before executing; it's a zero-stakes simulated environment and makes a fluid agentic demo | — Pending |
-| Failed-action notes are templated by the backend, not a second LLM call | The LLM writes its message before actions run; a template is cheap and deterministic | — Pending |
-| Tracked tickers = watchlist ∪ held positions | Removing a held ticker from the watchlist must not break valuation | — Pending |
-| GSD model profile: quality; parallel execution with worktrees | User settings choice | — Pending |
+| Build the entire PLAN.md as the v1 milestone | User request: "everything as described in planning/PLAN.md" | ✓ Good: shipped v1 in 3 vertical slices over 5 days |
+| Keep the existing market subsystem as validated; integrate rather than rewrite | Complete, tested, and reviewed (all 15 review findings fixed) | ✓ Good: integrated unchanged apart from the FastAPI/Starlette bump |
+| SSE over WebSockets; static Next.js export served by FastAPI | One-way push is enough; single origin, single port | ✓ Good: one origin, no CORS, reconnect via `retry: 1000` |
+| Non-streaming chat with structured output and auto-execution | Must parse the complete JSON before executing; it's a zero-stakes simulated environment and makes a fluid agentic demo | ✓ Good: shipped in Phase 3 |
+| Failed-action notes are templated by the backend, not a second LLM call | The LLM writes its message before actions run; a template is cheap and deterministic | ✓ Good: shipped in Phase 3 |
+| Tracked tickers = watchlist ∪ held positions | Removing a held ticker from the watchlist must not break valuation | ✓ Good: verified in Phase 2 |
+| GSD model profile: quality; parallel execution with worktrees | User settings choice | ✓ Good: parallel worktrees worked; frequent merges |
 | Node 22 (not PLAN.md's original Node 20) for the frontend build stage and local dev | Node 20 reached end-of-life in April 2026; user decision 2026-10-23 (PLAN.md §11 updated to match) | ✓ Shipped in Phase 1 |
 | Bump to FastAPI 0.162 / Starlette 1.10 before building on the backend | Current Starlette 1.x; all 139 market tests pass unchanged | ✓ Phase 1 |
 | One shared `state_lock` (asyncio.Lock) per app for every mutation | Watchlist, snapshots, and Phase 2 trade/reset services must serialize against each other | ✓ Phase 1; Phase 2 must reuse it |
@@ -129,4 +148,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-30 after Phase 3*
+*Last updated: 2026-10-30 after v1 milestone*
