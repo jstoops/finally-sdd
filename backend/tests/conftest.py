@@ -1,4 +1,5 @@
-"""Shared pytest fixtures: settings, app builders, a live client and a fake market source.
+"""Shared pytest fixtures: settings, app builders, a live client, a fake market source
+and a fake LLM client.
 
 Fixtures only; tests never import this module directly.
 """
@@ -7,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator
 
@@ -14,6 +16,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.chat.mock import GREETING
 from app.config import Settings
 from app.db import Database
 from app.main import create_app
@@ -59,6 +62,27 @@ class RecordingSource(MarketDataSource):
         return list(self._tickers)
 
 
+class FakeLLMClient:
+    """Fake LLMClient: returns scripted raw replies in order, or raises `error`.
+
+    Every `complete` call records a copy of its messages in `calls`. With no
+    scripted reply left it returns the JSON greeting envelope.
+    """
+
+    def __init__(self, replies: list[str] | None = None, error: Exception | None = None) -> None:
+        self.replies = list(replies or [])
+        self.error = error
+        self.calls: list[list[dict[str, str]]] = []
+
+    async def complete(self, messages: list[dict[str, str]]) -> str:
+        self.calls.append([dict(m) for m in messages])
+        if self.error is not None:
+            raise self.error
+        if self.replies:
+            return self.replies.pop(0)
+        return json.dumps({"message": GREETING, "trades": [], "watchlist_changes": []})
+
+
 def simulator_factory(cache: PriceCache) -> MarketDataSource:
     """A fast simulator source for tests (50 ms ticks)."""
     return SimulatorDataSource(price_cache=cache, update_interval=0.05)
@@ -101,6 +125,12 @@ def client(make_app) -> Iterator[TestClient]:
     """A started app (lifespan run) backed by the fast simulator; `client.app` is the app."""
     with TestClient(make_app()) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def fake_llm() -> type[FakeLLMClient]:
+    """The FakeLLMClient class: call it to build a scripted LLM client."""
+    return FakeLLMClient
 
 
 @pytest.fixture
