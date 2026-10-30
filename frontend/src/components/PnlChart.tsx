@@ -1,9 +1,10 @@
 "use client";
 
 // P&L chart (PF-08): total portfolio value from GET /api/portfolio/history as a Lightweight
-// Charts BaselineSeries based at the starting cash, green above and red below. The terminal's
-// refresh() loads the history on mount, each trade and reset refetch it, and this panel polls
-// it every PNL_REFRESH_MS. The chart is created once per mount inside an effect (the export
+// Charts BaselineSeries based at the starting cash, drawn in the terminal's --color-up token
+// above it and --color-down below (read in the mount effect). The terminal's refresh() loads
+// the history on mount, each trade and reset refetch it, and this panel polls it every
+// PNL_REFRESH_MS. The chart is created once per mount inside an effect (the export
 // prerenders this component).
 import {
   BaselineSeries,
@@ -13,7 +14,13 @@ import {
 } from "lightweight-charts";
 import { useEffect, useMemo, useRef } from "react";
 
-import { CHART_THEME, formatLocalTime } from "@/domain/chart";
+import {
+  CHART_THEME,
+  formatLocalTime,
+  PNL_TOKEN_FALLBACK,
+  pnlSeriesColors,
+  readColorToken,
+} from "@/domain/chart";
 import { toSnapshotSeries } from "@/domain/pnl";
 import { STARTING_CASH } from "@/domain/portfolio";
 import { usePortfolio } from "@/store/portfolio";
@@ -51,14 +58,13 @@ export function PnlChart() {
       },
       localization: { timeFormatter: formatLocalTime },
     });
+    // The terminal's up/down tokens, read here because the export prerenders this component.
+    const style = getComputedStyle(document.documentElement);
+    const up = readColorToken(style, "--color-up", PNL_TOKEN_FALLBACK.up);
+    const down = readColorToken(style, "--color-down", PNL_TOKEN_FALLBACK.down);
     const series = chart.addSeries(BaselineSeries, {
       baseValue: { type: "price", price: STARTING_CASH },
-      topLineColor: "#22c55e",
-      topFillColor1: "rgba(34,197,94,0.28)",
-      topFillColor2: "rgba(34,197,94,0.05)",
-      bottomLineColor: "#ef4444",
-      bottomFillColor1: "rgba(239,68,68,0.05)",
-      bottomFillColor2: "rgba(239,68,68,0.28)",
+      ...pnlSeriesColors(up, down),
       lineWidth: 2,
       priceLineVisible: false,
     });
