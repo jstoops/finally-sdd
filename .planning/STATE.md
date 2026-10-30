@@ -1,43 +1,42 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 03
-current_phase_name: AI Copilot and Complete Terminal
-status: verifying
-stopped_at: Phase 02 complete, ready to plan Phase 3
-last_updated: "2026-10-30T20:34:24.089Z"
+status: completed
+stopped_at: Phase 03 complete — all phases complete
+last_updated: "2026-10-30T21:18:33.785Z"
 last_activity: 2026-10-30
-last_activity_desc: Phase 03 execution started
-state_head: 085251dd04534f2217f2396e176866571e3acab1
+last_activity_desc: Phase 03 complete
+state_head: f9430b287cf20fff4c94d0ce7cf39914bb009156
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 19
   completed_plans: 19
-  percent: 67
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-28)
+See: .planning/PROJECT.md (updated 2026-10-30)
 
 **Core value:** A user can open one URL, watch prices stream live, and trade a simulated portfolio, either manually or by asking the AI copilot, with every number (cash, positions, P&L) staying correct and updating in real time.
-**Current focus:** Phase 03 — AI Copilot and Complete Terminal
+**Current focus:** Milestone wrap-up — all 3 phases complete
 
 ## Current Position
 
-Phase: 03 (AI Copilot and Complete Terminal) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
-Last activity: 2026-10-30 - Completed quick task 261029-vpc: Fix Phase 3 UI review findings
+Phase: 03
+Plan: Not started
+Status: All phases complete
+Last activity: 2026-10-30 — Phase 03 complete
 
-Progress: [███████░░░] 67%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 14
+- Total plans completed: 19
 - Average duration: -
 - Total execution time: 0.0 hours
 
@@ -47,6 +46,7 @@ Progress: [███████░░░] 67%
 |-------|-------|-------|----------|
 | 01 | 7 | - | - |
 | 02 | 7 | - | - |
+| 03 | 5 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -73,6 +73,9 @@ Recent decisions affecting current work:
 - [Phase 2]: Trade quantity is StrictFloat and capped at 1,000,000,000; every quantity failure is a `DomainError`, so the Phase 3 per-action executor can catch one type
 - [Phase 2]: Trade errors carry "need $X, have $Y" fragments for Phase 3 templated failure notes
 - [Phase 2]: Reset does not clear sparklines, chat or chart selection; that is PF-10 in Phase 3
+- [Phase 3]: `POST /api/reset` waits on the chat turn lock, then the state lock (CR-01, 836898b); chat Send is blocked while a reset runs
+- [Phase 3]: `litellm==1.106.2` pinned; OpenRouter routing `require_parameters: True`, `allow_fallbacks: False`
+- [Quick 261029-vpc]: panel pairs stack below `lg`; P&L chart reads `--color-up`/`--color-down`; one `text-xs` floor for small text
 
 ### Pending Todos
 
@@ -83,7 +86,8 @@ Recent decisions affecting current work:
 - [Phase 1]: Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed (UAT 01 gap, minor); after pulling changes, run with `--build`. Recurred in UAT 02: always rebuild before UAT
 - [Phase 2]: Compose warns that the old `finally_finally-data` volume does not match `finally-data`; a rebuild may start on a fresh database
 - [Phase 2]: Advisory only: `GET /api/portfolio` snapshot isolation under concurrent trades has no interleaving test (VERIFICATION truth 14); review warnings WR-01 and WR-04 remain open and non-blocking
-- [Phase 3, resolved 2026-10-29]: Cerebras strict-schema acceptance verified: user ran `backend/chat_llm_spike.py` against OpenRouter with the real key; parsed reply "Order placed and watch luster updated.", usage confirmed in the OpenRouter dashboard
+- [Phase 3]: Watchlist column clips ticker symbols to one letter at 768px width (minor, predates quick task 261029-vpc)
+- [Phase 3]: Advisory IN-01: mock matching uses word boundaries where PLAN §9 says "contains" (non-blocking)
 
 ### Quick Tasks Completed
 
@@ -101,6 +105,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-10-28
-Stopped at: Phase 2 complete (UAT 5/5), ready to plan Phase 3
+Last session: 2026-10-30
+Stopped at: Phase 03 complete (UAT 3/3, verification passed, security 0 open) — all phases complete, ready for milestone audit
 Resume file: None

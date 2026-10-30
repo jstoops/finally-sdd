@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Live Market Terminal** - One command launches the container; the user watches a dark terminal stream, chart and edit a live watchlist (completed 2026-10-27)
 - [x] **Phase 2: Trading and Live Portfolio** - The user trades from the trade bar and sees cash, positions, heatmap, P&L and trade history update live, then can reset (completed 2026-10-28)
-- [ ] **Phase 3: AI Copilot and Complete Terminal** - The user trades and manages the watchlist by chatting with FinAlly; the full terminal is proven end to end
+- [x] **Phase 3: AI Copilot and Complete Terminal** - The user trades and manages the watchlist by chatting with FinAlly; the full terminal is proven end to end (completed 2026-10-30)
 
 ## Phase Details
 
@@ -101,7 +101,7 @@ Plans:
   4. Reloading the page restores the last 50 chat messages with their action chips exactly as they first appeared; Reset (disabled while a chat request is in flight) clears the chat panel, sparklines and chart selection and refetches every panel.
   5. On a wide screen the header, watchlist, main chart, heatmap, P&L chart, positions table, trade bar and collapsible chat panel are all visible at once and stay usable on a tablet; the backend pytest, frontend unit and Playwright suites pass, with E2E run from `test/docker-compose.test.yml` under `LLM_MOCK=true`, resetting before each test and covering all seven PLAN §12 scenarios.
 
-**Plans**: 5/5 plans executed
+**Plans**: 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Live Market Terminal | 7/7 | Complete    | 2026-10-27 |
 | 2. Trading and Live Portfolio | 7/7 | Complete    | 2026-10-28 |
-| 3. AI Copilot and Complete Terminal | 5/5 | In Progress | - |
+| 3. AI Copilot and Complete Terminal | 5/5 | Complete    | 2026-10-30 |
 
 ## Backlog
 

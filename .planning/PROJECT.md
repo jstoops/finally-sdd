@@ -38,32 +38,22 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 - ✓ `POST /api/reset`: one transaction restores the seeded state, re-syncs tracked tickers, records a fresh snapshot; PLAN §8 contract kept exactly (U-1) — Phase 2
 - ✓ Tracked tickers with positions: a held ticker removed from the watchlist keeps streaming; selling an unwatched ticker to zero drops it — Phase 2
 - ✓ Header live total, cash, P&L and Reset with `window.confirm`; positions table; squarified-treemap heatmap; P&L BaselineSeries chart at $10,000; trade bar with inline errors; trade history — all live from SSE with no `/api/portfolio` polling (P&L history polls every 30 s to match snapshots) — Phase 2 (UAT 02: 5/5)
+- ✓ `POST /api/chat` via LiteLLM → OpenRouter (`openrouter/openai/gpt-oss-120b`, Cerebras, strict structured output), portfolio context plus last 20 messages, FinAlly system prompt — Phase 3
+- ✓ Auto-execution (watchlist changes first, then trades, each independent, per-action status in `actions`, at most 10 + 10 per reply) through the same `TradeService`/`WatchlistService` rules; templated ⚠️ failure notes, no second LLM call — Phase 3
+- ✓ `GET /api/chat/history` (last 50, oldest first); `LLM_MOCK=true` deterministic mock through the same path; 503 without a key, 502 on LLM failure/unparseable output with the user message stored; 2,000-character cap — Phase 3
+- ✓ AI chat panel: collapsible side rail (≥1280px) / stacked below, history on load, starter prompts, loading row, inline action chips with failed actions distinct; refetch after actions; reset clears chat, sparklines and selection (PF-10) and waits for an in-flight chat turn — Phase 3 (UAT 03: 3/3)
+- ✓ Backend pytest (577), frontend unit tests (347), Playwright E2E (17) in `test/docker-compose.test.yml` with `LLM_MOCK=true` and reset per test, covering all §12 scenarios plus tablet layout — Phase 3
 
 ### Active
 
 <!-- Everything else in planning/PLAN.md. Hypotheses until shipped. -->
 
-**AI chat**
-- [ ] `POST /api/chat` via LiteLLM → OpenRouter (`openrouter/openai/gpt-oss-120b`, Cerebras provider) with structured output (`message`, `trades`, `watchlist_changes`)
-- [ ] Portfolio context and the last 20 messages in the prompt; FinAlly system prompt
-- [ ] Auto-execution: watchlist changes first, then trades; each action independent; per-action status recorded in `actions`
-- [ ] Templated ⚠️ failure notes appended to the message; no second LLM call
-- [ ] `GET /api/chat/history` (last 50 messages, oldest first)
-- [ ] `LLM_MOCK=true` deterministic mock (buy / sell / add X / remove X / greeting) through the same execution path
-- [ ] Missing `OPENROUTER_API_KEY` → 503; LLM failure or unparseable output → 502 with the user message still stored
-
-**Frontend (Next.js static export, TypeScript, Tailwind dark theme)**
-- [ ] AI chat panel: collapsible, history loaded on page load, loading indicator, inline action confirmations, failed actions visibly distinct
-- [ ] Data flow: refetch after chat actions; after reset, clear the chat panel, sparklines and chart selection (PF-10; Phase 2 reset already refetches server state)
-
 **Packaging & ops**
 - [ ] Start scripts reuse an existing `finally:latest` image after code changes unless `--build` is passed; rebuild when sources are newer, or say so in the README quick start (UAT 01 gap, minor; bit again in UAT 02 test 5, where a stale image hid the 02-07 quantity cap)
 - [ ] Compose volume naming: an existing `finally_finally-data` volume no longer matches the compose file's `finally-data`, so a rebuild can start on a fresh database (seen during UAT 02)
 
-**Testing**
-- [ ] Backend pytest: tracked tickers, trade logic and edge cases, LLM parsing, partial failures and mock mode, API status codes and shapes, reset
-- [ ] Frontend unit tests: rendering, price flash, connection status transitions, watchlist CRUD, portfolio calculations, chat rendering
-- [ ] Playwright E2E in `test/` with `docker-compose.test.yml`, `LLM_MOCK=true`, reset before each test, covering all §12 scenarios
+**UI polish**
+- [ ] Watchlist column clips ticker symbols to one letter at 768px width (found in quick task 261029-vpc; predates it)
 
 ### Out of Scope
 
@@ -79,7 +69,7 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 
 ## Context
 
-- **Current state (after Phase 2):** one container ships the live terminal plus manual trading: trade/portfolio/history/trades/reset APIs, and a header, positions table, heatmap, P&L chart, trade bar and trade history computed live from SSE. AI chat, reset clearing of sparklines/chat/selection (PF-10) and Playwright E2E remain for Phase 3.
+- **Current state (after Phase 3):** every PLAN.md feature ships in one container: live terminal, manual trading, the AI copilot (real model or `LLM_MOCK`) that trades and edits the watchlist, and the full test pyramid (577 backend, 347 frontend, 17 E2E). All roadmap phases are complete; open items are minor packaging/ops and UI polish.
 - **Established patterns to follow:** router factories (`create_*_router(deps)`) with no module-level state; dependencies built in `lifespan` and injected; blocking work kept off the event loop; only sources write to `PriceCache`; trades read prices from `PriceCache`.
 - **Single process:** `PriceCache` is process-local, so uvicorn must run with one worker.
 - **Known concerns (CONCERNS.md):** `MASSIVE_POLL_INTERVAL` can go as low as 1s, which exceeds the free-tier limit; SSE ticks are sent even when nothing changed; the test-module table in `MARKET_DATA_SUMMARY.md` is stale; there is no CI running ruff/pytest.
@@ -116,6 +106,10 @@ A user can open one URL, watch prices stream live, and trade a simulated portfol
 | Trade error messages carry "need $X, have $Y" / "need N, have M" fragments | Phase 3 builds templated failure notes from them without a second LLM call | ✓ Phase 2 |
 | `POST /api/reset` keeps PLAN §8 exactly: no body, no headers, no 400 path | User decision U-1; E2E reset calls need no special body | ✓ Phase 2 |
 | P&L chart is a BaselineSeries at $10,000 and polls `/api/portfolio/history` every 30 s | Matches the backend snapshot timer so points appear without a trade; `/api/portfolio` itself is never polled | ✓ Phase 2 |
+| `litellm==1.106.2` exact pin; OpenRouter routing `require_parameters: True`, `allow_fallbacks: False` | Supply-chain safety (avoid the compromised 1.82.7/1.82.8); keep requests on a provider that honors strict `response_format` | ✓ Phase 3 |
+| Lenient envelope parse with per-item `StrictStr`/`StrictFloat` validation; services enforce all semantics | A malformed item fails alone instead of failing the whole reply | ✓ Phase 3 |
+| `POST /api/reset` takes the chat turn lock before the state lock (CR-01) | A reset mid-turn must not let the turn's trades land in the fresh account | ✓ Phase 3 (836898b) |
+| Panel pairs stack below `lg` (1024px), not `md` | At 768px side-by-side halves were too cramped for the positions table | ✓ Quick task 261029-vpc |
 
 ## Evolution
 
@@ -135,4 +129,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-28 after Phase 2*
+*Last updated: 2026-10-30 after Phase 3*
