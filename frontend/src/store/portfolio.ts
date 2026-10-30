@@ -120,9 +120,10 @@ interface PortfolioState {
   resetting: boolean;
   /**
    * POST /api/reset, then refresh(). Resolves null on success, or the error message.
-   * The caller reloads the watchlist (the stores never import each other).
+   * `onCommitted` runs as soon as the POST succeeds, before the refresh, so the caller can
+   * clear the chat and reload the watchlist at once (the stores never import each other).
    */
-  reset: () => Promise<string | null>;
+  reset: (onCommitted?: () => void) => Promise<string | null>;
 }
 
 export const usePortfolio = create<PortfolioState>()((set, get) => ({
@@ -202,7 +203,7 @@ export const usePortfolio = create<PortfolioState>()((set, get) => ({
       return { error: failureMessage(err) };
     }
   },
-  reset: async () => {
+  reset: async (onCommitted) => {
     set({ resetting: true });
     try {
       try {
@@ -210,6 +211,7 @@ export const usePortfolio = create<PortfolioState>()((set, get) => ({
       } catch (err) {
         return failureMessage(err);
       }
+      onCommitted?.();
       await get().refresh();
       return null;
     } finally {

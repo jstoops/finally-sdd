@@ -323,6 +323,44 @@ describe("Header reset", () => {
       }
     });
 
+    it("clears the chat as soon as the reset POST succeeds, before the refresh returns", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      let release: (res: Response) => void = () => {};
+      stubApi({
+        "POST /api/reset": { status: "ok" },
+        "GET /api/watchlist": { tickers: WATCHLIST },
+        "GET /api/portfolio": () =>
+          new Promise<Response>((resolve) => {
+            release = resolve;
+          }),
+      });
+      render(<Header />);
+      seedDirtyState();
+
+      await act(async () => reset());
+      await act(async () => {});
+
+      // The refresh is still in flight: the reset is running, yet the chat is already empty.
+      expect(usePortfolio.getState().resetting).toBe(true);
+      expect(useChat.getState().entries).toEqual([]);
+      expect(usePrices.getState().spark).toEqual({});
+
+      await act(async () =>
+        release(
+          jsonResponse({
+            cash_balance: 10000,
+            positions_value: 0,
+            total_value: 10000,
+            unrealized_pnl: 0,
+            positions: [],
+          }),
+        ),
+      );
+      await act(async () => {});
+      expect(usePortfolio.getState().resetting).toBe(false);
+      expect(useChat.getState().entries).toEqual([]);
+    });
+
     it("a failed reset leaves the chat, sparklines and selection untouched", async () => {
       vi.spyOn(window, "confirm").mockReturnValue(true);
       stubApi({

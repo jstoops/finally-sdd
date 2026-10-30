@@ -73,10 +73,10 @@ const WAIT_FOR_CHAT = "Wait for FinAlly to finish replying";
  * flight, and the chat panel blocks sends while a reset runs (the store's `resetting` flag).
  * Neither guard covers another tab or a direct POST: the server serializes them instead.
  * POST /api/reset waits for any in-flight chat turn, so that turn's actions land in the
- * pre-reset account and are wiped with it. After a successful reset it clears the chat, the
- * sparklines and the chart selection, then reloads the watchlist (the portfolio store's
- * reset() already reloaded the portfolio, trades and P&L history). A failure shows inline
- * and clears nothing.
+ * pre-reset account and are wiped with it. As soon as the POST succeeds (before the portfolio
+ * store's refresh of the portfolio, trades and P&L history) it clears the chat, the
+ * sparklines and the chart selection and reloads the watchlist, so the UI never shows the
+ * old conversation against the fresh account. A failure shows inline and clears nothing.
  */
 function ResetButton() {
   const resetting = usePortfolio((s) => s.resetting);
@@ -88,17 +88,15 @@ function ResetButton() {
     if (useChat.getState().pending || usePortfolio.getState().resetting) return;
     if (!window.confirm(RESET_CONFIRM)) return;
     setResetError(null);
-    const err = await usePortfolio.getState().reset();
-    if (err === null) {
+    const err = await usePortfolio.getState().reset(() => {
       useChat.getState().clear();
       usePrices.getState().clearSparklines();
       // With no selection, the reload's nextSelection picks the first default ticker and
       // the chart reseeds its history because `selected` changed.
       useWatchlist.getState().clearSelection();
       void useWatchlist.getState().loadWatchlist();
-    } else {
-      setResetError(err);
-    }
+    });
+    if (err !== null) setResetError(err);
   };
 
   return (
