@@ -1,29 +1,21 @@
 ---
-status: testing
+status: complete
 phase: 03-ai-copilot-and-complete-terminal
 source: [03-VERIFICATION.md]
 started: 2026-10-30T07:58:13Z
-updated: 2026-10-30T08:20:00Z
+updated: 2026-10-30T09:00:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Sign off on CR-01 (reset is not serialized with an in-flight chat turn)
-expected: |
-  Decide whether the backend race is acceptable (plan threat T-03-12 accepted it as a demo
-  limitation) or must be fixed before the phase closes. PF-10's written text is met: Reset is
-  disabled while this tab's chat is pending. A second tab, a direct API call, or a send during a
-  reset can still run the model's actions on the fresh $10,000 account and store an orphan reply.
-  Fix if rejected: reset route waits on the chat turn lock, Send is disabled while a reset runs,
-  the chat clears as soon as the reset POST succeeds, plus a reset-mid-turn test.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
 ### 1. Sign off on CR-01 (reset is not serialized with an in-flight chat turn)
 expected: Either an explicit acceptance of the race as a demo limitation, or a fix (reset waits on the chat turn lock) with a reset-mid-turn test.
-result: [pending]
+result: pass
+notes: 2026-10-30 user chose to fix (/gsd-code-review 03 --fix). Fixed in 836898b: POST /api/reset takes the chat turn lock before the state lock; chat Send disabled while a reset runs; TestResetDuringTurn proves no trade lands in the fresh account. WR-01..WR-04 fixed in a85d3ff, 2f997c5, 23dccf9, 9616a29. Gates after fixes: backend 577 passed, frontend 328 passed, E2E 12 passed.
 
 ### 2. Live "Analyze my portfolio" with the real model
 expected: With OPENROUTER_API_KEY set and a few positions held, asking "Analyze my portfolio" returns a reply that cites the actual cash, positions and P&L, and a "buy"/"add" request through the real model executes and shows chips.
@@ -38,9 +30,9 @@ notes: 2026-10-30 user: every panel usable at 1024x768 with chat stacked below P
 ## Summary
 
 total: 3
-passed: 2
+passed: 3
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
