@@ -630,6 +630,23 @@ describe("Terminal", () => {
     expect(screen.getByTestId("chat-input")).toBeInTheDocument();
   });
 
+  it("stacks the panel pairs below lg and sets them side by side from lg", async () => {
+    await renderTerminal();
+    const pairs = [
+      ["panel-heatmap", "panel-pnl"],
+      ["panel-positions", "panel-trade"],
+    ];
+    for (const [left, right] of pairs) {
+      const parent = screen.getByTestId(left).parentElement;
+      expect(parent).not.toBeNull();
+      expect(screen.getByTestId(right).parentElement).toBe(parent);
+      const classes = (parent?.className ?? "").split(/\s+/);
+      expect(classes).toContain("grid-cols-1");
+      expect(classes).toContain("lg:grid-cols-2");
+      expect(classes).not.toContain("grid-cols-2");
+    }
+  });
+
   it("loads chat history once on mount", async () => {
     const fetchMock = await renderTerminal();
     expect(callsTo(fetchMock, "/api/chat/history")).toHaveLength(1);

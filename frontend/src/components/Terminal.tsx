@@ -6,6 +6,7 @@
 //          The chat column is 360px, or a 2.75rem rail when the chat is collapsed.
 //   md-xl: watchlist | center, with chat moved under the center column; the page scrolls.
 //          Collapsed, the chat shrinks to its header row.
+//   <lg:   the Heatmap/P&L and Positions/Trade pairs stack into one column.
 import { useEffect } from "react";
 
 import type { Position } from "@/api/types";
@@ -29,6 +30,13 @@ const GRID_COLLAPSED =
   "grid flex-1 gap-1 p-1 md:grid-cols-[240px_minmax(0,1fr)] xl:min-h-0 xl:grid-cols-[260px_minmax(0,1fr)_2.75rem]";
 const CHAT_EXPANDED = "min-h-64 md:col-start-2 xl:col-start-3 xl:row-start-1 xl:min-h-0";
 const CHAT_COLLAPSED = "md:col-start-2 xl:col-start-3 xl:row-start-1 xl:min-h-0";
+// Below lg the page scrolls, so fr rows would size every row to the tallest stacked pair;
+// content-sized rows keep the chart at its floor. lg and xl keep the fr templates.
+const CENTER_ROWS =
+  "grid min-h-0 gap-1 grid-rows-[minmax(18rem,auto)_auto_auto] lg:grid-rows-[minmax(16rem,50fr)_minmax(10rem,25fr)_minmax(12rem,25fr)] xl:grid-rows-[50fr_25fr_25fr]";
+// Heatmap/P&L and Positions/Trade: stacked below lg (12rem floor each), side by side from lg.
+const PANEL_PAIR =
+  "grid min-h-0 grid-cols-1 auto-rows-[minmax(12rem,auto)] gap-1 lg:auto-rows-auto lg:grid-cols-2";
 
 export function Terminal() {
   const chatCollapsed = useChat((s) => s.collapsed);
@@ -78,13 +86,13 @@ export function Terminal() {
         <div className="flex min-h-0 flex-col md:row-span-2 xl:row-span-1">
           <Watchlist />
         </div>
-        <div className="grid min-h-0 gap-1 grid-rows-[minmax(16rem,50fr)_minmax(10rem,25fr)_minmax(12rem,25fr)] xl:grid-rows-[50fr_25fr_25fr]">
+        <div className={CENTER_ROWS}>
           <ChartPanel />
-          <div className="grid min-h-0 grid-cols-2 gap-1">
+          <div className={PANEL_PAIR}>
             <Heatmap />
             <PnlChart />
           </div>
-          <div className="grid min-h-0 grid-cols-2 gap-1">
+          <div className={PANEL_PAIR}>
             <PositionsTable />
             <TradePanel />
           </div>
