@@ -169,6 +169,7 @@ describe("history", () => {
     expect(systems()).toHaveLength(1);
     expect(systems()[0]).toHaveTextContent("Database busy");
     expect(systems()[0]).toHaveAttribute("data-tone", "error");
+    expect(systems()[0]).toHaveClass("text-xs");
     await typeAndEnter("hello");
     expect(chatPosts(fetchMock)).toHaveLength(1);
     expect(assistantBubbles()[0]).toHaveTextContent("Hi there.");
@@ -185,6 +186,7 @@ describe("loading", () => {
     const loading = screen.getByTestId("chat-loading");
     expect(loading).toHaveAttribute("role", "status");
     expect(loading).toHaveTextContent("FinAlly is thinking…");
+    expect(loading).toHaveClass("text-xs");
     expect(sendButton()).toBeDisabled();
 
     await act(async () => post.release(messageOf()));
@@ -316,6 +318,21 @@ describe("chip", () => {
     expect(chip).toHaveAttribute("title", error);
   });
 
+  it("executed and failed chips use the text-xs scale", async () => {
+    await renderHistory([
+      messageOf({
+        actions: actionsOf({
+          trades: [
+            { ticker: "NVDA", side: "buy", quantity: 5, status: "executed", price: 875.2 },
+            { ticker: "TSLA", side: "buy", quantity: 50, status: "failed", error: "No cash." },
+          ],
+        }),
+      }),
+    ]);
+    expect(chips()).toHaveLength(2);
+    for (const chip of chips()) expect(chip).toHaveClass("text-xs");
+  });
+
   it("renders null fields as em dashes without throwing", async () => {
     await renderHistory([
       messageOf({
@@ -442,6 +459,7 @@ describe("prompt", () => {
     const prompts = screen.getAllByTestId("chat-prompt");
     expect(prompts.map((p) => p.textContent)).toEqual([...PROMPTS]);
     for (const p of prompts) expect(p).toHaveAttribute("type", "button");
+    for (const p of prompts) expect(p).toHaveClass("text-xs");
   });
 
   it("hides the prompts when the history has messages", async () => {
@@ -599,6 +617,30 @@ describe("collapse", () => {
     expect(screen.getByTestId("chat-toggle")).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("chat-list")).toBeInTheDocument();
     expect(screen.getByTestId("chat-input")).toBeInTheDocument();
+  });
+
+  it("the toggle has a 24px minimum box when expanded and collapsed", async () => {
+    await renderPanel();
+    expect(screen.getByTestId("chat-toggle")).toHaveClass("h-6", "min-w-6", "-my-1");
+    fireEvent.click(screen.getByTestId("chat-toggle"));
+    const toggle = screen.getByTestId("chat-toggle");
+    expect(toggle).toHaveClass("h-6", "min-w-6", "xl:my-0");
+    expect(toggle).toHaveAttribute("type", "button");
+    expect(toggle).toHaveAttribute("aria-controls");
+  });
+
+  it("the heading is visible vertical text on the collapsed xl rail", async () => {
+    await renderPanel();
+    const expanded = screen.getByTestId("chat-title");
+    expect(expanded).toHaveTextContent("AI Chat");
+    expect(expanded).not.toHaveClass("xl:[writing-mode:vertical-rl]");
+    expect(expanded).not.toHaveClass("xl:sr-only");
+
+    fireEvent.click(screen.getByTestId("chat-toggle"));
+    const collapsed = screen.getByTestId("chat-title");
+    expect(collapsed).toHaveTextContent("AI Chat");
+    expect(collapsed).toHaveClass("xl:[writing-mode:vertical-rl]", "xl:order-last");
+    expect(collapsed).not.toHaveClass("xl:sr-only");
   });
 
   it("aria-controls points at the panel body", async () => {

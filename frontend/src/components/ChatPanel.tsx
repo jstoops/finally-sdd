@@ -66,7 +66,7 @@ function Chip({
       data-kind={kind}
       data-status={status}
       title={status === "failed" ? error : undefined}
-      className={`whitespace-pre-wrap break-words rounded-sm border px-1.5 py-0.5 font-mono text-[11px] ${CHIP_CLASS[status]}`}
+      className={`whitespace-pre-wrap break-words rounded-sm border px-1.5 py-0.5 font-mono text-xs ${CHIP_CLASS[status]}`}
     >
       {text}
     </li>
@@ -125,7 +125,7 @@ function EntryRow({ entry }: { entry: ChatEntry }) {
       data-testid="chat-system"
       data-tone={entry.tone}
       role={entry.tone === "error" ? "alert" : undefined}
-      className={`self-stretch whitespace-pre-wrap break-words text-center text-[11px] ${
+      className={`self-stretch whitespace-pre-wrap break-words text-center text-xs ${
         entry.tone === "error" ? "text-down" : "text-muted"
       }`}
     >
@@ -202,8 +202,9 @@ export function ChatPanel({ className = "" }: { className?: string }) {
         }`}
       >
         <h2
+          data-testid="chat-title"
           className={`text-xs font-semibold uppercase tracking-wide text-muted ${
-            collapsed ? "xl:sr-only" : ""
+            collapsed ? "xl:order-last xl:[writing-mode:vertical-rl]" : ""
           }`}
         >
           AI Chat
@@ -216,8 +217,8 @@ export function ChatPanel({ className = "" }: { className?: string }) {
           aria-label={collapsed ? "Expand AI chat" : "Collapse AI chat"}
           title={collapsed ? "Expand AI chat" : "Collapse AI chat"}
           onClick={toggleCollapsed}
-          className={`ml-auto rounded-sm px-1.5 font-mono text-xs text-muted hover:text-accent focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary ${
-            collapsed ? "xl:mx-auto" : ""
+          className={`-my-1 ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-sm px-1.5 font-mono text-xs text-muted hover:text-accent focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary ${
+            collapsed ? "xl:mx-auto xl:my-0" : ""
           }`}
         >
           {collapsed ? "«" : "»"}
@@ -240,7 +241,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
               <li
                 data-testid="chat-loading"
                 role="status"
-                className="self-start animate-pulse text-[11px] text-muted"
+                className="self-start animate-pulse text-xs text-muted"
               >
                 FinAlly is thinking…
               </li>
@@ -254,7 +255,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
                   type="button"
                   data-testid="chat-prompt"
                   onClick={() => void submit(prompt, false)}
-                  className="rounded-sm border border-border px-1.5 py-0.5 text-[11px] text-muted hover:border-primary hover:text-text focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary"
+                  className="rounded-sm border border-border px-1.5 py-0.5 text-xs text-muted hover:border-primary hover:text-text focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary"
                 >
                   {prompt}
                 </button>
