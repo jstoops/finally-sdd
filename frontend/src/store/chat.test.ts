@@ -48,7 +48,7 @@ const messageIds = () =>
     .entries.map((e) => (e.kind === "message" ? e.message.id : `system:${e.text}`));
 
 beforeEach(() => {
-  useChat.setState({ entries: [], pending: false, loaded: false, collapsed: false });
+  useChat.setState({ entries: [], pending: false, loaded: false, settled: false, collapsed: false });
 });
 
 afterEach(() => {
@@ -144,6 +144,17 @@ describe("useChat loadHistory", () => {
     expect(callsTo(fetchMock, "/api/chat/history")).toHaveLength(1);
     expect(messageIds()).toEqual(["h-1", "h-2"]);
     expect(useChat.getState().loaded).toBe(true);
+    expect(useChat.getState().settled).toBe(true);
+  });
+
+  it("is not settled while the first load is in flight", async () => {
+    const history = deferred<ChatHistoryResponse>();
+    stubApi({ "GET /api/chat/history": history.handler });
+    const load = useChat.getState().loadHistory();
+    expect(useChat.getState().settled).toBe(false);
+    history.release({ messages: HISTORY });
+    await load;
+    expect(useChat.getState().settled).toBe(true);
   });
 
   it("is idempotent: loading twice leaves the server messages once", async () => {
@@ -172,6 +183,7 @@ describe("useChat loadHistory", () => {
     stubApi({ "GET /api/chat/history": history.handler });
     const load = useChat.getState().loadHistory();
     useChat.getState().clear();
+    expect(useChat.getState().settled).toBe(true);
     history.release({ messages: HISTORY });
     await load;
     expect(useChat.getState().entries).toEqual([]);
@@ -183,6 +195,8 @@ describe("useChat loadHistory", () => {
     const entries = useChat.getState().entries;
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ kind: "system", tone: "error", text: "Database busy" });
+    // A failed load still settles, so the panel does not block sends forever.
+    expect(useChat.getState().settled).toBe(true);
   });
 
   it("shows the network message when the server cannot be reached", async () => {
@@ -202,6 +216,7 @@ describe("useChat loadHistory", () => {
     stubApi({ "GET /api/chat/history": { tickers: [] } });
     await useChat.getState().loadHistory();
     expect(useChat.getState().loaded).toBe(false);
+    expect(useChat.getState().settled).toBe(true);
     expect(useChat.getState().entries).toHaveLength(1);
     expect(useChat.getState().entries[0]).toMatchObject({ kind: "system", tone: "error" });
   });

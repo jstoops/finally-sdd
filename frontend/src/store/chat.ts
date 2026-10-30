@@ -78,6 +78,12 @@ interface ChatState {
   pending: boolean;
   /** True once a GET /api/chat/history has been applied. */
   loaded: boolean;
+  /**
+   * True once the newest history load has settled (applied or failed), or after a clear. The
+   * panel blocks sends and hides the starter prompts until then: a send bumps the history
+   * guard, so a send that raced the first load would discard the stored conversation.
+   */
+  settled: boolean;
   /** True when the panel is folded to its header (UX-02). */
   collapsed: boolean;
   /** GET /api/chat/history: replaces the entries unless a send or a clear happened since. */
@@ -97,6 +103,7 @@ export const useChat = create<ChatState>()((set, get) => ({
   entries: [],
   pending: false,
   loaded: false,
+  settled: false,
   collapsed: false,
 
   loadHistory: async () => {
@@ -105,17 +112,20 @@ export const useChat = create<ChatState>()((set, get) => ({
     try {
       body = await apiFetch<unknown>("/api/chat/history");
     } catch (err) {
-      if (seq === sequence) set((s) => ({ entries: [...s.entries, errorEntry(failureMessage(err))] }));
+      if (seq === sequence) {
+        set((s) => ({ entries: [...s.entries, errorEntry(failureMessage(err))], settled: true }));
+      }
       return;
     }
     if (seq !== sequence) return;
     if (!isChatHistory(body)) {
-      set((s) => ({ entries: [...s.entries, errorEntry(HISTORY_ERROR)] }));
+      set((s) => ({ entries: [...s.entries, errorEntry(HISTORY_ERROR)], settled: true }));
       return;
     }
     set({
       entries: body.messages.map((message) => ({ kind: "message", message })),
       loaded: true,
+      settled: true,
     });
   },
 
@@ -164,7 +174,8 @@ export const useChat = create<ChatState>()((set, get) => ({
   clear: () => {
     bump();
     clears += 1;
-    set({ entries: [] });
+    // The server has no messages after a reset, so a discarded first load blocks nothing.
+    set({ entries: [], settled: true });
   },
 
   toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),

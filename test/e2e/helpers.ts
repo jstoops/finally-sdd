@@ -47,9 +47,10 @@ export function sellFromBar(page: Page, ticker: string, qty: number): Promise<vo
   return tradeFromBar(page, "sell", ticker, qty);
 }
 
-/** Send one chat message with Enter. */
+/** Send one chat message with Enter, once the panel accepts sends (history loaded, idle). */
 export async function sendChat(page: Page, text: string): Promise<void> {
   const input = page.getByTestId("chat-input");
   await input.fill(text);
+  await expect(page.getByTestId("chat-send")).toBeEnabled();
   await input.press("Enter");
 }

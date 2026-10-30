@@ -139,6 +139,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
   const collapsed = useChat((s) => s.collapsed);
   const toggleCollapsed = useChat((s) => s.toggleCollapsed);
   const resetting = usePortfolio((s) => s.resetting);
+  const settled = useChat((s) => s.settled);
   const [text, setText] = useState("");
   const listRef = useRef<HTMLUListElement>(null);
   const bodyId = useId();
@@ -156,10 +157,12 @@ export function ChatPanel({ className = "" }: { className?: string }) {
 
   /**
    * Shared by Enter, the Send button and the prompt chips; one request in flight at most, and
-   * none while a reset runs (the draft is kept, so it can be sent once the reset finishes).
+   * none while a reset runs or before the first history load settles (the draft is kept). A
+   * send during the history load would make the store discard the stored conversation.
    */
   async function submit(message: string, fromDraft: boolean) {
-    if (useChat.getState().pending || usePortfolio.getState().resetting) return;
+    const chat = useChat.getState();
+    if (chat.pending || !chat.settled || usePortfolio.getState().resetting) return;
     if (fromDraft && validateChatMessage(message) === null) setText("");
     const reply = await useChat.getState().send(message);
     if (reply?.actions) {
@@ -180,7 +183,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
     void submit(text, true);
   }
 
-  const showPrompts = entries.length === 0 && !pending && !resetting;
+  const showPrompts = settled && entries.length === 0 && !pending && !resetting;
 
   return (
     <section
@@ -267,7 +270,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
             <button
               type="submit"
               data-testid="chat-send"
-              disabled={pending || resetting}
+              disabled={pending || resetting || !settled}
               title={resetting ? "Wait for the reset to finish" : undefined}
               className="shrink-0 self-end rounded-sm bg-submit px-3 py-1 text-xs font-semibold text-text hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary disabled:cursor-wait disabled:opacity-50"
             >

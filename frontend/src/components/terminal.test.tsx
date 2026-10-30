@@ -174,7 +174,7 @@ beforeEach(() => {
     snapshots: [],
     historyLoaded: false,
   });
-  useChat.setState({ entries: [], pending: false, loaded: false, collapsed: false });
+  useChat.setState({ entries: [], pending: false, loaded: false, settled: false, collapsed: false });
 });
 
 afterEach(() => {

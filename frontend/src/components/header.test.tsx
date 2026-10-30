@@ -19,7 +19,7 @@ beforeEach(() => {
     loadError: null,
     resetting: false,
   });
-  useChat.setState({ entries: [], pending: false, loaded: false, collapsed: false });
+  useChat.setState({ entries: [], pending: false, loaded: false, settled: false, collapsed: false });
   useWatchlist.setState({ entries: [], loaded: false, loadError: null, selected: null, held: [] });
 });
 

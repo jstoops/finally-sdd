@@ -80,7 +80,7 @@ const postedMessage = (fetchMock: ReturnType<typeof stubApi>, index = 0) =>
   JSON.parse(String((chatPosts(fetchMock)[index][1] as RequestInit).body)).message;
 
 beforeEach(() => {
-  useChat.setState({ entries: [], pending: false, loaded: false, collapsed: false });
+  useChat.setState({ entries: [], pending: false, loaded: false, settled: false, collapsed: false });
   usePortfolio.setState({
     cash: null,
     positions: [],
@@ -128,17 +128,37 @@ describe("history", () => {
     expect(all.slice(2)).toEqual(stored);
   });
 
-  it("keeps the optimistic message and the reply when a stale history load resolves late", async () => {
+  it("blocks sends and hides the prompts until the history load settles, keeping the history", async () => {
     const history = deferred<ChatHistoryResponse>();
     const fetchMock = await renderPanel({
       "GET /api/chat/history": history.handler,
-      "POST /api/chat": messageOf({ content: "Hi there." }),
+      "POST /api/chat": messageOf({ id: "m-9", content: "Hi there." }),
     });
+    expect(sendButton()).toBeDisabled();
+    expect(screen.queryAllByTestId("chat-prompt")).toHaveLength(0);
     await typeAndEnter("hello");
+    expect(chatPosts(fetchMock)).toHaveLength(0);
+    expect(input().value).toBe("hello");
+
     await act(async () => history.release({ messages: STORED }));
+    expect(sendButton()).not.toBeDisabled();
+    await pressEnter();
     expect(chatPosts(fetchMock)).toHaveLength(1);
     const messages = screen.getAllByTestId("chat-message");
-    expect(messages.map((m) => m.textContent)).toEqual(["hello", "Hi there."]);
+    expect(messages.map((m) => m.textContent?.slice(0, 9))).toEqual([
+      "buy",
+      "Buying 1 ",
+      "hello",
+      "Hi there.",
+    ]);
+  });
+
+  it("shows the prompts once an empty history load settles", async () => {
+    const history = deferred<ChatHistoryResponse>();
+    await renderPanel({ "GET /api/chat/history": history.handler });
+    expect(screen.queryAllByTestId("chat-prompt")).toHaveLength(0);
+    await act(async () => history.release({ messages: [] }));
+    expect(screen.getAllByTestId("chat-prompt")).toHaveLength(PROMPTS.length);
   });
 
   it("shows a failed history load as an error bubble and stays usable", async () => {
