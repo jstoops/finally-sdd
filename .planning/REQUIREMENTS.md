@@ -67,38 +67,38 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 - [x] **PF-07**: User sees a portfolio heatmap (in-house squarified treemap, positioned divs) with tiles sized by live weight and colored by P&L % on a diverging green/red scale clamped at ±5%; tiny tiles hide their label behind a tooltip; with no positions it shows "No positions — buy something or ask FinAlly" (G-06)
 - [x] **PF-08**: User sees a P&L line chart (Lightweight Charts) of total value over time from `/api/portfolio/history`; it renders a single point gracefully and refetches every 30 seconds as well as after trades, chat actions and reset (G-03)
 - [x] **PF-09**: User can reset the account from the header after a `window.confirm`; `POST /api/reset` returns `{"status": "ok"}` after one transaction restores $10,000 cash and the default watchlist and deletes positions, trades, snapshots and chat messages, then re-syncs tracked tickers and records a fresh snapshot; reset shares the trade lock (G-16)
-- [ ] **PF-10**: After a reset the frontend re-fetches everything and clears the chat panel, sparklines and chart selection; the Reset button is disabled while a chat request is in flight (G-16)
+- [x] **PF-10**: After a reset the frontend re-fetches everything and clears the chat panel, sparklines and chart selection; the Reset button is disabled while a chat request is in flight (G-16)
 
 ### AI Chat
 
 - [x] **AI-01**: `POST /api/chat` calls `openrouter/openai/gpt-oss-120b` via LiteLLM → OpenRouter with Cerebras as the provider (per the `cerebras-inference` skill), requesting structured output `{message, trades?, watchlist_changes?}`, and returns the stored assistant message (PLAN §8)
-- [ ] **AI-02**: Each prompt contains the FinAlly system prompt, a portfolio context (cash, positions with P&L, watchlist with live prices and Chg %, total value) built from the same service as `GET /api/portfolio`, and the last 20 messages
-- [ ] **AI-03**: The system prompt instructs the model to analyze concentration and P&L, suggest trades with reasoning, execute when asked, manage the watchlist, be concise, convert dollar amounts to share quantities (4dp) using the price in context, use the exact held quantity for "sell all", and reply in plain text without markdown tables (G-17)
-- [ ] **AI-04**: The response envelope is validated strictly (`message` required); each trade and watchlist item is validated individually, so a malformed item is recorded as `failed` without failing the response; unparseable output or an LLM call failure returns `502 {"error": ...}` with the user message still stored (G-11)
+- [x] **AI-02**: Each prompt contains the FinAlly system prompt, a portfolio context (cash, positions with P&L, watchlist with live prices and Chg %, total value) built from the same service as `GET /api/portfolio`, and the last 20 messages
+- [x] **AI-03**: The system prompt instructs the model to analyze concentration and P&L, suggest trades with reasoning, execute when asked, manage the watchlist, be concise, convert dollar amounts to share quantities (4dp) using the price in context, use the exact held quantity for "sell all", and reply in plain text without markdown tables (G-17)
+- [x] **AI-04**: The response envelope is validated strictly (`message` required); each trade and watchlist item is validated individually, so a malformed item is recorded as `failed` without failing the response; unparseable output or an LLM call failure returns `502 {"error": ...}` with the user message still stored (G-11)
 - [x] **AI-05**: Actions auto-execute without confirmation: watchlist changes first, then trades, each independently and in order, through the same trade and watchlist services as the REST routes; each outcome (`executed` with price for trades, or `failed` with `error`) is stored in `actions`; `actions` is `null` when nothing was requested
-- [ ] **AI-06**: An AI add of an already-watched ticker is `executed`; an AI remove of an unwatched ticker is `failed` with "{TICKER} is not on your watchlist" (G-20)
-- [ ] **AI-07**: At most 10 trades and 10 watchlist changes run per reply; extra actions are recorded as `failed` with "too many actions" (G-21)
-- [ ] **AI-08**: For each failed action the backend appends a templated ⚠️ note to the message (e.g. "⚠️ Couldn't buy 50 TSLA: insufficient cash (need $12,450.00, have $8,095.00)."); no second LLM call; the stored content includes the notes
-- [ ] **AI-09**: Without `OPENROUTER_API_KEY` (and `LLM_MOCK` not `true`) the app still starts and `POST /api/chat` returns `503` with the PLAN §5 message, storing nothing; an empty/whitespace message or one over 2,000 characters returns `400` (G-15)
+- [x] **AI-06**: An AI add of an already-watched ticker is `executed`; an AI remove of an unwatched ticker is `failed` with "{TICKER} is not on your watchlist" (G-20)
+- [x] **AI-07**: At most 10 trades and 10 watchlist changes run per reply; extra actions are recorded as `failed` with "too many actions" (G-21)
+- [x] **AI-08**: For each failed action the backend appends a templated ⚠️ note to the message (e.g. "⚠️ Couldn't buy 50 TSLA: insufficient cash (need $12,450.00, have $8,095.00)."); no second LLM call; the stored content includes the notes
+- [x] **AI-09**: Without `OPENROUTER_API_KEY` (and `LLM_MOCK` not `true`) the app still starts and `POST /api/chat` returns `503` with the PLAN §5 message, storing nothing; an empty/whitespace message or one over 2,000 characters returns `400` (G-15)
 - [x] **AI-10**: With `LLM_MOCK=true`, deterministic mock responses (buy / sell / add X / remove X / greeting, first rule wins) match case-insensitively on word boundaries, uppercase the captured ticker, and flow through the same execution, failure-note and storage path (G-14)
-- [ ] **AI-11**: `GET /api/chat/history` returns the last 50 messages oldest first, and the chat panel loads it on page load, rendering stored actions exactly as live ones
-- [ ] **AI-12**: User can type in a collapsible chat panel, send with Enter, and see a loading indicator; sending is disabled while a request is in flight; the view auto-scrolls to the newest message; text renders with preserved whitespace
+- [x] **AI-11**: `GET /api/chat/history` returns the last 50 messages oldest first, and the chat panel loads it on page load, rendering stored actions exactly as live ones
+- [x] **AI-12**: User can type in a collapsible chat panel, send with Enter, and see a loading indicator; sending is disabled while a request is in flight; the view auto-scrolls to the newest message; text renders with preserved whitespace
 - [x] **AI-13**: User sees each executed action as an inline confirmation chip (side, quantity, ticker, fill price) and each failed action as a visibly distinct chip with its error
-- [ ] **AI-14**: User sees `502`/`503`/`400` chat errors as a distinct system bubble in the chat panel
+- [x] **AI-14**: User sees `502`/`503`/`400` chat errors as a distinct system bubble in the chat panel
 - [x] **AI-15**: After a chat reply with non-null `actions`, the frontend re-fetches `/api/portfolio`, `/api/watchlist` and `/api/portfolio/history`, so the heatmap, positions, cash and watchlist reflect the AI's actions within about a second
-- [ ] **AI-16** *(extra)*: An empty chat panel shows clickable prompt chips (e.g. "Analyze my portfolio", "Buy 5 NVDA") that send that message
+- [x] **AI-16** *(extra)*: An empty chat panel shows clickable prompt chips (e.g. "Analyze my portfolio", "Buy 5 NVDA") that send that message
 
 ### Visual Design
 
 - [x] **UX-01**: The UI uses a Tailwind custom dark theme (backgrounds `#0d1117` / `#1a1a2e`, muted gray borders, no pure black, accent yellow `#ecad0a`, blue `#209dd7`, purple `#753991` submit buttons) with tabular numerals so ticking digits don't jitter
-- [ ] **UX-02**: The layout is a dense, desktop-first terminal grid showing header, watchlist, main chart, heatmap, P&L chart, positions, trade bar and chat panel at once on a wide screen, and stays usable on a tablet
+- [x] **UX-02**: The layout is a dense, desktop-first terminal grid showing header, watchlist, main chart, heatmap, P&L chart, positions, trade bar and chat panel at once on a wide screen, and stays usable on a tablet
 
 ### Testing
 
-- [ ] **TST-01**: Backend pytest covers the trade service (avg cost, P&L, oversell, insufficient cash, selling at a loss, dust removal, no cached price, rounding), tracked tickers (unwatching a held ticker keeps it priced, selling an unwatched ticker to zero drops it), LLM parsing (valid schemas, malformed output, per-item failures, failure notes, caps, mock triggers), API status codes and response shapes, and reset
-- [ ] **TST-02**: Frontend unit tests (with a mocked `EventSource` and fake timers) cover component rendering, the price flash trigger, connection status transitions, watchlist add/remove, portfolio calculations, and chat rendering including failed actions and the loading state
+- [x] **TST-01**: Backend pytest covers the trade service (avg cost, P&L, oversell, insufficient cash, selling at a loss, dust removal, no cached price, rounding), tracked tickers (unwatching a held ticker keeps it priced, selling an unwatched ticker to zero drops it), LLM parsing (valid schemas, malformed output, per-item failures, failure notes, caps, mock triggers), API status codes and response shapes, and reset
+- [x] **TST-02**: Frontend unit tests (with a mocked `EventSource` and fake timers) cover component rendering, the price flash trigger, connection status transitions, watchlist add/remove, portfolio calculations, and chat rendering including failed actions and the loading state
 - [ ] **TST-03**: Playwright E2E runs from `test/docker-compose.test.yml` (app + Playwright containers) with `LLM_MOCK=true`, resets before each test, and covers all seven PLAN §12 scenarios using relational assertions (cash decreased, tile color matches displayed P&L sign) rather than exact prices (G-19)
-- [ ] **TST-04**: UI elements that tests read expose stable `data-testid` hooks, and P&L-bearing elements expose their sign as a `data-*` attribute (G-19)
+- [x] **TST-04**: UI elements that tests read expose stable `data-testid` hooks, and P&L-bearing elements expose their sign as a `data-*` attribute (G-19)
 
 ## v2 Requirements
 
@@ -194,29 +194,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PF-07 | Phase 2 | Complete |
 | PF-08 | Phase 2 | Complete |
 | PF-09 | Phase 2 | Complete |
-| PF-10 | Phase 3 | Pending |
+| PF-10 | Phase 3 | Complete |
 | AI-01 | Phase 3 | Complete |
-| AI-02 | Phase 3 | Pending |
-| AI-03 | Phase 3 | Pending |
-| AI-04 | Phase 3 | Pending |
+| AI-02 | Phase 3 | Complete |
+| AI-03 | Phase 3 | Complete |
+| AI-04 | Phase 3 | Complete |
 | AI-05 | Phase 3 | Complete |
-| AI-06 | Phase 3 | Pending |
-| AI-07 | Phase 3 | Pending |
-| AI-08 | Phase 3 | Pending |
-| AI-09 | Phase 3 | Pending |
+| AI-06 | Phase 3 | Complete |
+| AI-07 | Phase 3 | Complete |
+| AI-08 | Phase 3 | Complete |
+| AI-09 | Phase 3 | Complete |
 | AI-10 | Phase 3 | Complete |
-| AI-11 | Phase 3 | Pending |
-| AI-12 | Phase 3 | Pending |
+| AI-11 | Phase 3 | Complete |
+| AI-12 | Phase 3 | Complete |
 | AI-13 | Phase 3 | Complete |
-| AI-14 | Phase 3 | Pending |
+| AI-14 | Phase 3 | Complete |
 | AI-15 | Phase 3 | Complete |
-| AI-16 | Phase 3 | Pending |
+| AI-16 | Phase 3 | Complete |
 | UX-01 | Phase 1 | Complete |
-| UX-02 | Phase 3 | Pending |
-| TST-01 | Phase 3 | Pending |
-| TST-02 | Phase 3 | Pending |
+| UX-02 | Phase 3 | Complete |
+| TST-01 | Phase 3 | Complete |
+| TST-02 | Phase 3 | Complete |
 | TST-03 | Phase 3 | Pending |
-| TST-04 | Phase 3 | Pending |
+| TST-04 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 64 total
