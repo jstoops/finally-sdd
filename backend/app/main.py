@@ -127,7 +127,8 @@ def create_app(
     # No GZip middleware: it would buffer the SSE stream.
     app.include_router(create_stream_router(cache))
     app.include_router(create_watchlist_router(watchlist))
-    app.include_router(create_portfolio_router(trade_service, portfolio))
+    # Reset waits on the chat turn lock, so a reply never runs against the fresh account.
+    app.include_router(create_portfolio_router(trade_service, portfolio, chat_service.turn_lock))
     app.include_router(create_chat_router(chat_service))
     app.include_router(create_system_router())
     install_api_not_found(app)  # after every /api router

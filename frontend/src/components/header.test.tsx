@@ -12,7 +12,13 @@ import { callsTo, jsonResponse, stubApi } from "@/test/stubFetch";
 
 beforeEach(() => {
   usePrices.setState({ ticks: {}, lastTs: {}, spark: {}, status: "connecting" });
-  usePortfolio.setState({ cash: null, positions: [], loaded: false, loadError: null });
+  usePortfolio.setState({
+    cash: null,
+    positions: [],
+    loaded: false,
+    loadError: null,
+    resetting: false,
+  });
   useChat.setState({ entries: [], pending: false, loaded: false, collapsed: false });
   useWatchlist.setState({ entries: [], loaded: false, loadError: null, selected: null, held: [] });
 });
@@ -214,10 +220,22 @@ describe("Header reset", () => {
     render(<Header />);
     await act(async () => reset());
     expect(screen.getByTestId("reset-button")).toBeDisabled();
+    // The shared flag the chat panel reads to block sends while the reset runs.
+    expect(usePortfolio.getState().resetting).toBe(true);
 
     await act(async () => release(jsonResponse({ status: "ok" })));
     await act(async () => {});
     expect(screen.getByTestId("reset-button")).not.toBeDisabled();
+    expect(usePortfolio.getState().resetting).toBe(false);
+  });
+
+  it("clears the resetting flag after a failed reset", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    stubApi({ "POST /api/reset": () => jsonResponse({ error: "boom" }, 500) });
+    render(<Header />);
+    await act(async () => reset());
+    await act(async () => {});
+    expect(usePortfolio.getState().resetting).toBe(false);
   });
 
   it("shows a failed reset inline and re-enables the button", async () => {

@@ -1,8 +1,8 @@
 "use client";
 
 // Header: the wordmark, the price-stream status dot, the simulated account's Total, Cash
-// and P&L since start (PF-04, PF-05) and the Reset button (PF-09, PF-10: blocked during a chat
-// reply, then clears the chat, sparklines and chart selection).
+// and P&L since start (PF-04, PF-05) and the Reset button (PF-09, PF-10: blocked during this
+// tab's chat reply, then clears the chat, sparklines and chart selection).
 import { useMemo, useState } from "react";
 
 import type { StreamStatus } from "@/api/types";
@@ -69,37 +69,35 @@ function Readout({
 const WAIT_FOR_CHAT = "Wait for FinAlly to finish replying";
 
 /**
- * Reset with a window.confirm gate (PF-09, PF-10). Disabled while a chat reply is in flight,
- * so a reply can never land in the fresh account. After a successful reset it clears the
- * chat, the sparklines and the chart selection, then reloads the watchlist (the portfolio
- * store's reset() already reloaded the portfolio, trades and P&L history). A failure shows
- * inline and clears nothing.
+ * Reset with a window.confirm gate (PF-09, PF-10). Disabled while this tab's chat reply is in
+ * flight, and the chat panel blocks sends while a reset runs (the store's `resetting` flag).
+ * Neither guard covers another tab or a direct POST: the server serializes them instead.
+ * POST /api/reset waits for any in-flight chat turn, so that turn's actions land in the
+ * pre-reset account and are wiped with it. After a successful reset it clears the chat, the
+ * sparklines and the chart selection, then reloads the watchlist (the portfolio store's
+ * reset() already reloaded the portfolio, trades and P&L history). A failure shows inline
+ * and clears nothing.
  */
 function ResetButton() {
-  const [resetting, setResetting] = useState(false);
+  const resetting = usePortfolio((s) => s.resetting);
   const [resetError, setResetError] = useState<string | null>(null);
   const chatPending = useChat((s) => s.pending);
 
   // window is touched only inside the click handler (static export prerender).
   const onClick = async () => {
-    if (useChat.getState().pending) return;
+    if (useChat.getState().pending || usePortfolio.getState().resetting) return;
     if (!window.confirm(RESET_CONFIRM)) return;
-    setResetting(true);
     setResetError(null);
-    try {
-      const err = await usePortfolio.getState().reset();
-      if (err === null) {
-        useChat.getState().clear();
-        usePrices.getState().clearSparklines();
-        // With no selection, the reload's nextSelection picks the first default ticker and
-        // the chart reseeds its history because `selected` changed.
-        useWatchlist.getState().clearSelection();
-        void useWatchlist.getState().loadWatchlist();
-      } else {
-        setResetError(err);
-      }
-    } finally {
-      setResetting(false);
+    const err = await usePortfolio.getState().reset();
+    if (err === null) {
+      useChat.getState().clear();
+      usePrices.getState().clearSparklines();
+      // With no selection, the reload's nextSelection picks the first default ticker and
+      // the chart reseeds its history because `selected` changed.
+      useWatchlist.getState().clearSelection();
+      void useWatchlist.getState().loadWatchlist();
+    } else {
+      setResetError(err);
     }
   };
 

@@ -5,7 +5,7 @@
 // starter prompts in an empty chat, a loading row, Enter to send and a collapse toggle.
 // Content renders as plain React text with preserved whitespace: never as HTML or markdown.
 // After a reply that ran actions, this component refreshes the portfolio and the watchlist
-// stores (the stores never import each other).
+// stores (the stores never import each other). Sends are blocked while an account reset runs.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 
 import type { ChatActions, ChatMessage, TradeAction, WatchlistAction } from "@/api/types";
@@ -138,6 +138,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
   const pending = useChat((s) => s.pending);
   const collapsed = useChat((s) => s.collapsed);
   const toggleCollapsed = useChat((s) => s.toggleCollapsed);
+  const resetting = usePortfolio((s) => s.resetting);
   const [text, setText] = useState("");
   const listRef = useRef<HTMLUListElement>(null);
   const bodyId = useId();
@@ -153,9 +154,12 @@ export function ChatPanel({ className = "" }: { className?: string }) {
     if (list) list.scrollTop = list.scrollHeight;
   }, [entries.length, pending, collapsed]);
 
-  /** Shared by Enter, the Send button and the prompt chips; one request in flight at most. */
+  /**
+   * Shared by Enter, the Send button and the prompt chips; one request in flight at most, and
+   * none while a reset runs (the draft is kept, so it can be sent once the reset finishes).
+   */
   async function submit(message: string, fromDraft: boolean) {
-    if (useChat.getState().pending) return;
+    if (useChat.getState().pending || usePortfolio.getState().resetting) return;
     if (fromDraft && validateChatMessage(message) === null) setText("");
     const reply = await useChat.getState().send(message);
     if (reply?.actions) {
@@ -176,7 +180,7 @@ export function ChatPanel({ className = "" }: { className?: string }) {
     void submit(text, true);
   }
 
-  const showPrompts = entries.length === 0 && !pending;
+  const showPrompts = entries.length === 0 && !pending && !resetting;
 
   return (
     <section
@@ -263,7 +267,8 @@ export function ChatPanel({ className = "" }: { className?: string }) {
             <button
               type="submit"
               data-testid="chat-send"
-              disabled={pending}
+              disabled={pending || resetting}
+              title={resetting ? "Wait for the reset to finish" : undefined}
               className="shrink-0 self-end rounded-sm bg-submit px-3 py-1 text-xs font-semibold text-text hover:brightness-110 focus-visible:outline focus-visible:outline-1 focus-visible:outline-primary disabled:cursor-wait disabled:opacity-50"
             >
               Send

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 from pydantic import BaseModel, StrictFloat
 
@@ -25,8 +27,13 @@ class TradeRequest(BaseModel):
     side: str
 
 
-def create_portfolio_router(trade_service: TradeService, portfolio: PortfolioService) -> APIRouter:
-    """Create the portfolio router bound to the given services (a new router per call)."""
+def create_portfolio_router(
+    trade_service: TradeService, portfolio: PortfolioService, chat_turn_lock: asyncio.Lock
+) -> APIRouter:
+    """Create the portfolio router bound to the given services (a new router per call).
+
+    `chat_turn_lock` is `ChatService.turn_lock`: reset waits for an in-flight chat turn.
+    """
     router = APIRouter(tags=["portfolio"])
 
     @router.get("/api/portfolio")
@@ -55,8 +62,12 @@ def create_portfolio_router(trade_service: TradeService, portfolio: PortfolioSer
         """Reset the account to its seeded state.
 
         Takes no body and reads no headers, so any POST resets (PLAN §8, user decision U-1).
+        Waits for an in-flight chat turn first, so the turn's actions run against the account
+        it was asked about and its messages are cleared with it. The lock order matches a
+        chat turn (turn lock, then the state lock inside reset), so the two cannot deadlock.
         """
-        await portfolio.reset()
+        async with chat_turn_lock:
+            await portfolio.reset()
         return {"status": "ok"}
 
     return router

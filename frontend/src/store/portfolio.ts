@@ -114,6 +114,11 @@ interface PortfolioState {
   /** POST /api/portfolio/trade. Resolves to the recorded fill, or an inline error message. */
   trade: (ticker: string, quantity: number, side: Side) => Promise<TradeOutcome>;
   /**
+   * True while a reset() runs (the POST and the refresh after it). The chat panel blocks
+   * sends meanwhile, so no message is sent into an account that is being wiped.
+   */
+  resetting: boolean;
+  /**
    * POST /api/reset, then refresh(). Resolves null on success, or the error message.
    * The caller reloads the watchlist (the stores never import each other).
    */
@@ -129,6 +134,7 @@ export const usePortfolio = create<PortfolioState>()((set, get) => ({
   tradesLoaded: false,
   snapshots: [],
   historyLoaded: false,
+  resetting: false,
   loadHistory: async () => {
     historySequence += 1;
     const seq = historySequence;
@@ -197,12 +203,17 @@ export const usePortfolio = create<PortfolioState>()((set, get) => ({
     }
   },
   reset: async () => {
+    set({ resetting: true });
     try {
-      await apiFetch<ResetResponse>("/api/reset", { method: "POST" });
-    } catch (err) {
-      return failureMessage(err);
+      try {
+        await apiFetch<ResetResponse>("/api/reset", { method: "POST" });
+      } catch (err) {
+        return failureMessage(err);
+      }
+      await get().refresh();
+      return null;
+    } finally {
+      set({ resetting: false });
     }
-    await get().refresh();
-    return null;
   },
 }));

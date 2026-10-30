@@ -10,7 +10,9 @@ returns that stored row. An LLM failure or an unreadable reply is a 502 that kee
 the stored user message.
 
 The chat lock is never the shared state lock: the services the executor calls take
-that lock themselves, and it is not reentrant.
+that lock themselves, and it is not reentrant. POST /api/reset also takes the chat lock
+(`turn_lock`), before the state lock as a turn does, so a reset never lands between a
+turn's prompt and its actions: the reply always runs against the account it was asked about.
 """
 
 from __future__ import annotations
@@ -61,6 +63,11 @@ class ChatService:
         self._trades = trades
         self._client = llm_client
         self._turn_lock = asyncio.Lock()  # chat-only: serializes whole turns
+
+    @property
+    def turn_lock(self) -> asyncio.Lock:
+        """The lock held for a whole turn. Reset waits on it, then takes the state lock."""
+        return self._turn_lock
 
     async def handle(self, message: str) -> dict:
         """Run one turn for `message`; returns the stored assistant row (PLAN §8 shape).

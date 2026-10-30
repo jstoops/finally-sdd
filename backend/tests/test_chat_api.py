@@ -6,6 +6,9 @@ import dataclasses
 import json
 import re
 import sqlite3
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, contextmanager
 
 import pytest
@@ -295,3 +298,51 @@ class TestTurnLock:
         assert second["content"] == "Second answer."
         contents = [m["content"] for m in client.calls[1]]
         assert contents[2:] == ["first q", "First answer.", "second q"]
+
+
+BUY_AAPL_REPLY = json.dumps(
+    {"message": "Buying 1 AAPL.", "trades": [{"ticker": "AAPL", "side": "buy", "quantity": 1}]}
+)
+
+
+class ThreadGatedLLMClient:
+    """Holds its reply until the test thread sets `release`; sets `entered` once called.
+
+    threading events, not asyncio ones: the test drives the app from other threads.
+    """
+
+    def __init__(self, reply: str) -> None:
+        self.reply = reply
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    async def complete(self, messages: list[dict[str, str]]) -> str:
+        self.entered.set()
+        await asyncio.to_thread(self.release.wait, 5)
+        return self.reply
+
+
+class TestResetDuringTurn:
+    def test_reset_waits_for_the_turn_and_no_trade_lands_in_the_fresh_account(self, llm_app):
+        gate = ThreadGatedLLMClient(BUY_AAPL_REPLY)
+        with llm_app(gate) as client, ThreadPoolExecutor(max_workers=2) as pool:
+            chat = pool.submit(client.post, "/api/chat", json={"message": "buy one"})
+            assert gate.entered.wait(5), "the chat turn never reached the LLM call"
+            reset = pool.submit(client.post, "/api/reset")
+            time.sleep(0.2)
+            assert not reset.done(), "reset must wait for the in-flight chat turn"
+
+            gate.release.set()
+            chat_res = chat.result(timeout=5)
+            reset_res = reset.result(timeout=5)
+
+            assert chat_res.status_code == 200
+            assert chat_res.json()["actions"]["trades"][0]["status"] == "executed"
+            assert reset_res.status_code == 200
+            assert reset_res.json() == {"status": "ok"}
+            # The turn ran against the old account, then reset wiped it: a fresh account.
+            portfolio = client.get("/api/portfolio").json()
+            assert portfolio["cash_balance"] == 10000.0
+            assert portfolio["positions"] == []
+            assert chat_rows(client) == []
+            assert run_sql(client.app.state.db.path, "SELECT COUNT(*) FROM trades") == [(0,)]

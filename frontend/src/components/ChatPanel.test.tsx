@@ -81,7 +81,13 @@ const postedMessage = (fetchMock: ReturnType<typeof stubApi>, index = 0) =>
 
 beforeEach(() => {
   useChat.setState({ entries: [], pending: false, loaded: false, collapsed: false });
-  usePortfolio.setState({ cash: null, positions: [], loaded: false, loadError: null });
+  usePortfolio.setState({
+    cash: null,
+    positions: [],
+    loaded: false,
+    loadError: null,
+    resetting: false,
+  });
   useWatchlist.setState({ entries: [], loaded: false, loadError: null, selected: null, held: [] });
 });
 
@@ -442,6 +448,26 @@ describe("prompt", () => {
     await renderPanel();
     act(() => useChat.setState({ pending: true }));
     expect(screen.queryAllByTestId("chat-prompt")).toHaveLength(0);
+  });
+});
+
+describe("reset in flight", () => {
+  it("disables Send, hides the prompts and keeps the draft unsent until the reset ends", async () => {
+    const fetchMock = await renderPanel({ "POST /api/chat": messageOf() });
+    act(() => usePortfolio.setState({ resetting: true }));
+
+    expect(sendButton()).toBeDisabled();
+    expect(sendButton()).toHaveAttribute("title", "Wait for the reset to finish");
+    expect(screen.queryAllByTestId("chat-prompt")).toHaveLength(0);
+    await typeAndEnter("buy");
+    expect(chatPosts(fetchMock)).toHaveLength(0);
+    expect(input().value).toBe("buy");
+
+    act(() => usePortfolio.setState({ resetting: false }));
+    expect(sendButton()).not.toBeDisabled();
+    expect(screen.getAllByTestId("chat-prompt")).toHaveLength(PROMPTS.length);
+    await pressEnter();
+    expect(chatPosts(fetchMock)).toHaveLength(1);
   });
 });
 
