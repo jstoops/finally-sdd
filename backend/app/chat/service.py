@@ -105,7 +105,14 @@ class ChatService:
             content = reply.message
             if outcome.notes:
                 content = reply.message.rstrip() + "\n\n" + "\n".join(outcome.notes)
-            return await asyncio.to_thread(self._insert, "assistant", content, outcome.actions)
+            row = _new_row("assistant", content, outcome.actions)
+            try:
+                await asyncio.to_thread(self._write, row)
+            except Exception:
+                # The actions already committed: still return them, so the client refreshes
+                # the portfolio and watchlist instead of seeing a bare 500 with no actions.
+                logger.exception("Chat: actions ran but the assistant message was not stored")
+            return row
 
     async def history(self, limit: int = HISTORY_PAGE) -> list[dict]:
         """The last `limit` messages, oldest first, in the PLAN §8 shape."""
@@ -134,13 +141,13 @@ class ChatService:
 
     def _insert(self, role: str, content: str, actions: dict | None) -> dict:
         """Blocking insert of one chat row; returns it as the API dict (actions as a dict)."""
-        row = {
-            "id": str(uuid.uuid4()),
-            "role": role,
-            "content": content,
-            "actions": actions,
-            "created_at": now_iso(),
-        }
+        row = _new_row(role, content, actions)
+        self._write(row)
+        return row
+
+    def _write(self, row: dict) -> None:
+        """Blocking insert of one API-shaped chat row."""
+        role, content, actions = row["role"], row["content"], row["actions"]
         with self._db.transaction() as conn:
             conn.execute(
                 "INSERT INTO chat_messages (id, user_id, role, content, actions, created_at) "
@@ -154,4 +161,14 @@ class ChatService:
                     row["created_at"],
                 ),
             )
-        return row
+
+
+def _new_row(role: str, content: str, actions: dict | None) -> dict:
+    """A new chat row in the API shape (actions as a dict), stamped now."""
+    return {
+        "id": str(uuid.uuid4()),
+        "role": role,
+        "content": content,
+        "actions": actions,
+        "created_at": now_iso(),
+    }

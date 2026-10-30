@@ -528,6 +528,23 @@ describe("refetch", () => {
     expect(counts(fetchMock)).toEqual([0, 0, 0, 0]);
   });
 
+  it("a 500 refreshes once: the server may have run actions before failing", async () => {
+    const fetchMock = await renderPanel({
+      "POST /api/chat": () => new Response("Internal Server Error", { status: 500 }),
+    });
+    await typeAndEnter("buy");
+    expect(systems()).toHaveLength(1);
+    expect(counts(fetchMock)).toEqual([1, 1, 1, 1]);
+  });
+
+  it("a 400 refreshes nothing: the server rejected the message before any write", async () => {
+    const fetchMock = await renderPanel({
+      "POST /api/chat": () => jsonResponse({ error: "Message cannot be empty." }, 400),
+    });
+    await typeAndEnter("buy");
+    expect(counts(fetchMock)).toEqual([0, 0, 0, 0]);
+  });
+
   it("each reply with actions triggers its own refresh", async () => {
     const fetchMock = await renderPanel({
       "POST /api/chat": () =>

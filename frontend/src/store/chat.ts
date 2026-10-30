@@ -1,7 +1,7 @@
 // AI chat state (AI-01, AI-11 to AI-14): the conversation entries, the one in-flight send, the
 // history reload and the panel's collapsed flag. `send` checks the text locally, shows it at
 // once, posts it to /api/chat and appends the stored assistant reply, or an error entry with
-// the server's text. It resolves the reply to the caller, so the component (not this store)
+// the server's text. It resolves a SendResult to the caller, so the component (not this store)
 // refreshes other stores after actions: the stores never import each other.
 import { create } from "zustand";
 
@@ -40,6 +40,22 @@ function isChatHistory(body: unknown): body is ChatHistoryResponse {
     typeof body === "object" &&
     Array.isArray((body as { messages?: unknown }).messages)
   );
+}
+
+/**
+ * What a send did. `skipped`: nothing was posted (a send in flight, or the local check
+ * failed). `reply`: the stored assistant reply. `failed`: the request failed;
+ * `mayHaveActed` is true for a 5xx or a network error, after which the server may already
+ * have run trades or watchlist changes, so the caller should refresh.
+ */
+export type SendResult =
+  | { kind: "skipped" }
+  | { kind: "reply"; reply: ChatMessage }
+  | { kind: "failed"; mayHaveActed: boolean };
+
+/** True when a failed send may still have run actions on the server (a 5xx or no response). */
+function mayHaveActed(err: unknown): boolean {
+  return !(err instanceof ApiError) || err.status >= 500;
 }
 
 /** A stored message, or a local system line (an error or a note) that the server never saw. */
@@ -89,11 +105,11 @@ interface ChatState {
   /** GET /api/chat/history: replaces the entries unless a send or a clear happened since. */
   loadHistory: () => Promise<void>;
   /**
-   * Send `text` (trimmed). Resolves the assistant reply, or null when nothing was sent (a
-   * send already in flight, or the local check failed: an error entry is appended) or the
-   * request failed (an error entry is appended).
+   * Send `text` (trimmed). Resolves the assistant reply, `skipped` when nothing was sent
+   * (a send already in flight, or the local check failed: an error entry is appended) or
+   * `failed` when the request failed (an error entry is appended).
    */
-  send: (text: string) => Promise<ChatMessage | null>;
+  send: (text: string) => Promise<SendResult>;
   /** Empty the conversation locally (after a reset the server has none either). */
   clear: () => void;
   toggleCollapsed: () => void;
@@ -130,12 +146,12 @@ export const useChat = create<ChatState>()((set, get) => ({
   },
 
   send: async (text) => {
-    if (get().pending) return null;
+    if (get().pending) return { kind: "skipped" };
     const invalid = validateChatMessage(text);
     if (invalid !== null) {
       bump();
       set((s) => ({ entries: [...s.entries, errorEntry(invalid)] }));
-      return null;
+      return { kind: "skipped" };
     }
     const content = text.trim();
     const optimistic: ChatMessage = {
@@ -160,12 +176,12 @@ export const useChat = create<ChatState>()((set, get) => ({
       if (epoch === clears) {
         set((s) => ({ entries: [...s.entries, { kind: "message", message: reply }] }));
       }
-      return reply;
+      return { kind: "reply", reply };
     } catch (err) {
       if (epoch === clears) {
         set((s) => ({ entries: [...s.entries, errorEntry(failureMessage(err))] }));
       }
-      return null;
+      return { kind: "failed", mayHaveActed: mayHaveActed(err) };
     } finally {
       set({ pending: false });
     }

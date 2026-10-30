@@ -346,3 +346,44 @@ class TestResetDuringTurn:
             assert portfolio["positions"] == []
             assert chat_rows(client) == []
             assert run_sql(client.app.state.db.path, "SELECT COUNT(*) FROM trades") == [(0,)]
+
+
+class FixedLLMClient:
+    """Always answers with the same raw reply."""
+
+    def __init__(self, reply: str) -> None:
+        self.reply = reply
+
+    async def complete(self, messages: list[dict[str, str]]) -> str:
+        return self.reply
+
+
+class TestStoreFailureAfterActions:
+    async def test_actions_are_still_returned_when_the_assistant_insert_fails(self, trade_env):
+        trade_env.price("AAPL", 190.0)
+        service = ChatService(
+            trade_env.db,
+            trade_env.portfolio,
+            trade_env.watchlist,
+            trade_env.trades,
+            FixedLLMClient(BUY_AAPL_REPLY),
+        )
+
+        real_write = service._write
+
+        def locked_for_assistant(row: dict) -> None:
+            if row["role"] == "assistant":
+                raise sqlite3.OperationalError("database is locked")
+            real_write(row)
+
+        service._write = locked_for_assistant
+
+        row = await asyncio.wait_for(service.handle("buy one"), 5)
+
+        assert row["role"] == "assistant"
+        assert row["actions"]["trades"][0]["status"] == "executed"
+        # The trade really committed, so the client must refresh: it gets the actions back.
+        view = await trade_env.portfolio.view()
+        assert [p["ticker"] for p in view["positions"]] == ["AAPL"]
+        roles = run_sql(trade_env.db.path, "SELECT role FROM chat_messages ORDER BY rowid")
+        assert roles == [("user",)]

@@ -4,8 +4,9 @@
 // inline chip per action the assistant ran (failed ones visibly distinct), error bubbles,
 // starter prompts in an empty chat, a loading row, Enter to send and a collapse toggle.
 // Content renders as plain React text with preserved whitespace: never as HTML or markdown.
-// After a reply that ran actions, this component refreshes the portfolio and the watchlist
-// stores (the stores never import each other). Sends are blocked while an account reset runs.
+// After a reply that ran actions, or a failure after which the server may have run some (a 5xx
+// or a lost response), this component refreshes the portfolio and the watchlist stores (the
+// stores never import each other). Sends are blocked while an account reset runs.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 
 import type { ChatActions, ChatMessage, TradeAction, WatchlistAction } from "@/api/types";
@@ -164,8 +165,12 @@ export function ChatPanel({ className = "" }: { className?: string }) {
     const chat = useChat.getState();
     if (chat.pending || !chat.settled || usePortfolio.getState().resetting) return;
     if (fromDraft && validateChatMessage(message) === null) setText("");
-    const reply = await useChat.getState().send(message);
-    if (reply?.actions) {
+    const result = await useChat.getState().send(message);
+    const acted =
+      result.kind === "reply"
+        ? !!result.reply.actions
+        : result.kind === "failed" && result.mayHaveActed;
+    if (acted) {
       void usePortfolio.getState().refresh();
       void useWatchlist.getState().loadWatchlist();
     }

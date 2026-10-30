@@ -78,7 +78,7 @@ describe("validateChatMessage", () => {
 describe("useChat send", () => {
   it("rejects an empty message with a system entry and no request", async () => {
     const fetchMock = stubApi();
-    await expect(useChat.getState().send("   ")).resolves.toBeNull();
+    await expect(useChat.getState().send("   ")).resolves.toEqual({ kind: "skipped" });
     expect(callsTo(fetchMock, "/api/chat", "POST")).toHaveLength(0);
     const [entry] = useChat.getState().entries;
     expect(entry).toMatchObject({ kind: "system", tone: "error", text: EMPTY });
@@ -94,7 +94,10 @@ describe("useChat send", () => {
   it("posts the trimmed text and appends the optimistic message and the reply", async () => {
     const reply = messageOf({ id: "m-2" });
     const fetchMock = stubApi({ "POST /api/chat": reply });
-    await expect(useChat.getState().send("  hello\nthere  ")).resolves.toEqual(reply);
+    await expect(useChat.getState().send("  hello\nthere  ")).resolves.toEqual({
+      kind: "reply",
+      reply,
+    });
     const [call] = callsTo(fetchMock, "/api/chat", "POST");
     expect(JSON.parse(String((call[1] as RequestInit).body))).toEqual({
       message: "hello\nthere",
@@ -109,12 +112,12 @@ describe("useChat send", () => {
     expect(useChat.getState().pending).toBe(false);
   });
 
-  it("returns null with no request while another send is pending", async () => {
+  it("skips with no request while another send is pending", async () => {
     const post = deferred<ChatMessage>();
     const fetchMock = stubApi({ "POST /api/chat": post.handler });
     const first = useChat.getState().send("one");
     expect(useChat.getState().pending).toBe(true);
-    await expect(useChat.getState().send("two")).resolves.toBeNull();
+    await expect(useChat.getState().send("two")).resolves.toEqual({ kind: "skipped" });
     expect(callsTo(fetchMock, "/api/chat", "POST")).toHaveLength(1);
     post.release(messageOf({ id: "m-2" }));
     await first;
@@ -126,13 +129,38 @@ describe("useChat send", () => {
       "POST /api/chat": () =>
         jsonResponse({ error: "The AI assistant failed to respond. Try again." }, 502),
     });
-    await expect(useChat.getState().send("hi")).resolves.toBeNull();
+    await expect(useChat.getState().send("hi")).resolves.toEqual({
+      kind: "failed",
+      mayHaveActed: true,
+    });
     const entries = useChat.getState().entries;
     expect(entries).toHaveLength(2);
     expect(entries[1]).toMatchObject({
       kind: "system",
       tone: "error",
       text: "The AI assistant failed to respond. Try again.",
+    });
+  });
+
+  it("a 5xx or a network failure may have acted; a 4xx did not", async () => {
+    stubApi({ "POST /api/chat": () => jsonResponse({ error: "Bad." }, 400) });
+    await expect(useChat.getState().send("hi")).resolves.toEqual({
+      kind: "failed",
+      mayHaveActed: false,
+    });
+    stubApi({ "POST /api/chat": () => new Response("Internal Server Error", { status: 500 }) });
+    await expect(useChat.getState().send("hi")).resolves.toEqual({
+      kind: "failed",
+      mayHaveActed: true,
+    });
+    stubApi({
+      "POST /api/chat": () => {
+        throw new TypeError("Failed to fetch");
+      },
+    });
+    await expect(useChat.getState().send("hi")).resolves.toEqual({
+      kind: "failed",
+      mayHaveActed: true,
     });
   });
 });
