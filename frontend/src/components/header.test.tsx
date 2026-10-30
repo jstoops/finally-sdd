@@ -3,14 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Portfolio, Position, PriceFrame } from "@/api/types";
 import { Header, RESET_CONFIRM } from "@/components/Header";
+import { useChat } from "@/store/chat";
 import { usePortfolio } from "@/store/portfolio";
 import { startPriceStream, usePrices } from "@/store/prices";
+import { useWatchlist } from "@/store/watchlist";
 import { FakeEventSource } from "@/test/FakeEventSource";
 import { callsTo, jsonResponse, stubApi } from "@/test/stubFetch";
 
 beforeEach(() => {
   usePrices.setState({ ticks: {}, lastTs: {}, spark: {}, status: "connecting" });
   usePortfolio.setState({ cash: null, positions: [], loaded: false, loadError: null });
+  useChat.setState({ entries: [], pending: false, loaded: false, collapsed: false });
+  useWatchlist.setState({ entries: [], loaded: false, loadError: null, selected: null, held: [] });
 });
 
 afterEach(() => {
@@ -231,5 +235,106 @@ describe("Header reset", () => {
     expect(screen.getByTestId("reset-button")).not.toBeDisabled();
     expect(callsTo(fetchMock, "/api/portfolio")).toHaveLength(0);
     expect(callsTo(fetchMock, "/api/watchlist")).toHaveLength(0);
+  });
+
+  describe("PF-10", () => {
+    const WATCHLIST = ["AAPL", "GOOGL", "MSFT"].map((ticker) => ({
+      ticker,
+      price: 100,
+      open_price: 100,
+      added_at: "2026-10-09T14:00:00Z",
+    }));
+
+    /** Dirty local state: a conversation, sparklines and a non-first selection. */
+    function seedDirtyState() {
+      useChat.setState({
+        entries: [
+          {
+            kind: "message",
+            message: {
+              id: "m-1",
+              role: "user",
+              content: "buy",
+              actions: null,
+              created_at: "2026-10-09T14:03:22Z",
+            },
+          },
+        ],
+      });
+      usePrices.setState({ spark: { AAPL: [1, 2], GOOGL: [3, 4] }, lastTs: { AAPL: 2 } });
+      useWatchlist.setState({ entries: WATCHLIST, selected: "GOOGL", loaded: true });
+    }
+
+    it("reset is disabled while a chat request is pending and never asks to confirm", async () => {
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+      const fetchMock = stubApi({ "POST /api/reset": { status: "ok" } });
+      render(<Header />);
+      act(() => useChat.setState({ pending: true }));
+
+      const button = screen.getByTestId("reset-button");
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute("title", "Wait for FinAlly to finish replying");
+      await act(async () => reset());
+      expect(confirm).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      act(() => useChat.setState({ pending: false }));
+      expect(screen.getByTestId("reset-button")).not.toBeDisabled();
+      expect(screen.getByTestId("reset-button")).not.toHaveAttribute("title");
+    });
+
+    it("a confirmed reset clears the chat and sparklines and selects the first default ticker", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      const fetchMock = stubApi({
+        "POST /api/reset": { status: "ok" },
+        "GET /api/watchlist": { tickers: WATCHLIST },
+      });
+      render(<Header />);
+      seedDirtyState();
+
+      await act(async () => reset());
+      await act(async () => {});
+
+      expect(useChat.getState().entries).toEqual([]);
+      expect(usePrices.getState().spark).toEqual({});
+      // lastTs stays, so frames already seen never re-append to the cleared sparklines.
+      expect(usePrices.getState().lastTs).toEqual({ AAPL: 2 });
+      expect(useWatchlist.getState().selected).toBe("AAPL");
+      for (const path of ["/api/portfolio", "/api/trades", "/api/portfolio/history", "/api/watchlist"]) {
+        expect(callsTo(fetchMock, path)).toHaveLength(1);
+      }
+    });
+
+    it("a failed reset leaves the chat, sparklines and selection untouched", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      stubApi({
+        "POST /api/reset": () => jsonResponse({ error: "Reset failed on the server" }, 500),
+      });
+      render(<Header />);
+      seedDirtyState();
+
+      await act(async () => reset());
+      await act(async () => {});
+
+      expect(screen.getByTestId("reset-error")).toHaveTextContent("Reset failed on the server");
+      expect(useChat.getState().entries).toHaveLength(1);
+      expect(usePrices.getState().spark).toEqual({ AAPL: [1, 2], GOOGL: [3, 4] });
+      expect(useWatchlist.getState().selected).toBe("GOOGL");
+    });
+  });
+});
+
+describe("store reset helpers", () => {
+  it("clearSparklines empties every sparkline and keeps the last timestamps", () => {
+    usePrices.setState({ spark: { AAPL: [1, 2] }, lastTs: { AAPL: 5 } });
+    usePrices.getState().clearSparklines();
+    expect(usePrices.getState().spark).toEqual({});
+    expect(usePrices.getState().lastTs).toEqual({ AAPL: 5 });
+  });
+
+  it("clearSelection sets the selection to null", () => {
+    useWatchlist.setState({ selected: "GOOGL" });
+    useWatchlist.getState().clearSelection();
+    expect(useWatchlist.getState().selected).toBeNull();
   });
 });
