@@ -97,7 +97,7 @@ The market data subsystem (`backend/app/market/`: simulator, Massive poller, `Pr
 
 - [x] **TST-01**: Backend pytest covers the trade service (avg cost, P&L, oversell, insufficient cash, selling at a loss, dust removal, no cached price, rounding), tracked tickers (unwatching a held ticker keeps it priced, selling an unwatched ticker to zero drops it), LLM parsing (valid schemas, malformed output, per-item failures, failure notes, caps, mock triggers), API status codes and response shapes, and reset
 - [x] **TST-02**: Frontend unit tests (with a mocked `EventSource` and fake timers) cover component rendering, the price flash trigger, connection status transitions, watchlist add/remove, portfolio calculations, and chat rendering including failed actions and the loading state
-- [ ] **TST-03**: Playwright E2E runs from `test/docker-compose.test.yml` (app + Playwright containers) with `LLM_MOCK=true`, resets before each test, and covers all seven PLAN §12 scenarios using relational assertions (cash decreased, tile color matches displayed P&L sign) rather than exact prices (G-19)
+- [x] **TST-03**: Playwright E2E runs from `test/docker-compose.test.yml` (app + Playwright containers) with `LLM_MOCK=true`, resets before each test, and covers all seven PLAN §12 scenarios using relational assertions (cash decreased, tile color matches displayed P&L sign) rather than exact prices (G-19)
 - [x] **TST-04**: UI elements that tests read expose stable `data-testid` hooks, and P&L-bearing elements expose their sign as a `data-*` attribute (G-19)
 
 ## v2 Requirements
@@ -215,7 +215,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UX-02 | Phase 3 | Complete |
 | TST-01 | Phase 3 | Complete |
 | TST-02 | Phase 3 | Complete |
-| TST-03 | Phase 3 | Pending |
+| TST-03 | Phase 3 | Complete |
 | TST-04 | Phase 3 | Complete |
 
 **Coverage:**

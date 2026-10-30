@@ -101,7 +101,7 @@ Plans:
   4. Reloading the page restores the last 50 chat messages with their action chips exactly as they first appeared; Reset (disabled while a chat request is in flight) clears the chat panel, sparklines and chart selection and refetches every panel.
   5. On a wide screen the header, watchlist, main chart, heatmap, P&L chart, positions table, trade bar and collapsible chat panel are all visible at once and stay usable on a tablet; the backend pytest, frontend unit and Playwright suites pass, with E2E run from `test/docker-compose.test.yml` under `LLM_MOCK=true`, resetting before each test and covering all seven PLAN §12 scenarios.
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans executed
 
 Plans:
 **Wave 1**
@@ -113,7 +113,7 @@ Plans:
 - [x] 03-04-PLAN.md — Blocking legitimacy gate, litellm 1.106.2, OpenRouter → Cerebras client (strict schema, off-loop), key setting, 503 when unconfigured, human-run spike
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 03-05-PLAN.md — Isolated Playwright E2E (seven PLAN §12 scenarios + layout) from test/docker-compose.test.yml, and the full-suite phase gate
+- [x] 03-05-PLAN.md — Isolated Playwright E2E (seven PLAN §12 scenarios + layout) from test/docker-compose.test.yml, and the full-suite phase gate
 
 **UI hint**: yes
 
@@ -145,7 +145,7 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Live Market Terminal | 7/7 | Complete    | 2026-10-27 |
 | 2. Trading and Live Portfolio | 7/7 | Complete    | 2026-10-28 |
-| 3. AI Copilot and Complete Terminal | 4/5 | In Progress | - |
+| 3. AI Copilot and Complete Terminal | 5/5 | In Progress | - |
 
 ## Backlog
 
